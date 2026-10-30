@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Voto giudice</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  body { background: var(--bg); }
+  .top { background: var(--ink); color: #fff; padding: 14px 16px; }
+  .top .small { color: #cfc6bd; }
+  .bib { text-align: center; padding: 22px 16px; }
+  .bib .num { font-size: 3.2rem; font-weight: 800; color: var(--accent); line-height: 1; }
+  .crit { margin-bottom: 18px; }
+  .crit .lbl { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 8px; }
+  .crit .val { color: var(--accent); font-size: 1.2rem; font-weight: 800; min-width: 2ch; text-align: right; }
+  .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+  .scale button { background: #fff; color: var(--ink); border: 1px solid var(--line); padding: 12px 0; font-size: 1.05rem; }
+  .scale button.sel { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); }
+  .sticky button { width: 100%; padding: 16px; font-size: 1.1rem; }
+  .list a { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px; border-bottom: 1px solid var(--line); color: var(--ink); text-decoration: none; }
+  .done-ico { font-size: 3.5rem; text-align: center; }
+  dialog { border: 0; border-radius: var(--radius); padding: 20px; max-width: 360px; width: calc(100% - 32px); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+</style>
+</head>
+<body>
+<div class="top">
+  <div id="evName" style="font-weight:700">Voto Pizza</div>
+  <div class="small" id="who">&nbsp;</div>
+</div>
+<div class="wrap narrow" id="app"><p class="muted">Caricamento…</p></div>
+
+<dialog id="confirm">
+  <h2>Confermi il voto?</h2>
+  <p class="muted">Una volta inviato il voto è <b>definitivo</b> e non potrà essere modificato.</p>
+  <div id="recap" class="small"></div>
+  <div class="row" style="margin-top:16px">
+    <button class="ghost grow" id="cancel">Rivedi</button>
+    <button class="primary grow" id="ok">Invia voto</button>
+  </div>
+</dialog>
+
+<script>
+const app = document.getElementById('app');
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  const j = await r.json().catch(() => ({}));
+  return { status: r.status, ...j };
+}
+
+async function main() {
+  const me = await api('/api/judge/me');
+  if (me.status === 401) {
+    app.innerHTML = `<div class="card" style="text-align:center">
+      <div class="done-ico">🪪</div>
+      <h2>Telefono non ancora abilitato</h2>
+      <p class="muted">Inquadra con la fotocamera il <b>QR del tuo badge giudice</b> (te lo consegna l'organizzazione). Basta farlo una volta sola, poi potrai votare inquadrando le pettorine.</p>
+    </div>`;
+    return;
+  }
+  document.getElementById('evName').textContent = me.event.name;
+  document.getElementById('who').textContent = me.name;
+
+  const code = location.pathname.startsWith('/v/') ? location.pathname.slice(3) : null;
+  if (code) return voteScreen(code);
+  homeScreen(me);
+}
+
+function homeScreen(me) {
+  const done = me.competitors.filter((c) => c.voted).length;
+  app.innerHTML = `
+    <div class="card">
+      <h2>Ciao ${esc(me.name)} 👋</h2>
+      <p>Per votare, <b>inquadra con la fotocamera il QR sulla pettorina</b> del concorrente.</p>
+      <p class="muted small">Hai votato ${done} concorrenti su ${me.competitors.length}.</p>
+      <div class="bar"><i style="width:${me.competitors.length ? (done / me.competitors.length) * 100 : 0}%"></i></div>
+      ${me.event.status !== 'open' ? '<div class="msg err">La votazione è chiusa.</div>' : ''}
+    </div>
+    <div class="card list">
+      <h2>Concorrenti</h2>
+      <p class="muted small">In alternativa al QR puoi toccare il concorrente dall'elenco.</p>
+      ${me.competitors.map((c) => `<a href="/v/${c.code}">
+        <span><b>#${esc(c.number)}</b> ${esc(c.name)}</span>
+        <span>${c.voted ? '<span class="pill open">Votato ✓</span>' : '<span class="muted">›</span>'}</span>
+      </a>`).join('')}
+    </div>`;
+}
+
+async function voteScreen(code) {
+  const d = await api('/api/judge/competitor/' + encodeURIComponent(code));
+  if (d.status !== 200) {
+    app.innerHTML = `<div class="msg err">${esc(d.error || 'Errore')}</div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
+    return;
+  }
+  const head = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div><div style="font-weight:600;margin-top:6px">${esc(d.competitor.name)}</div></div>`;
+  if (d.voted) {
+    app.innerHTML = head + `<div class="card" style="text-align:center"><div class="done-ico">🔒</div><h2>Hai già votato questo concorrente</h2><p class="muted">Il tuo voto è registrato e segreto.</p></div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
+    return;
+  }
+  render(d, head);
+}
+
+function render(d, head) {
+  if (d.eventStatus && d.eventStatus !== 'open') {
+    app.innerHTML = head + '<div class="msg err">La votazione è chiusa.</div>';
+    return;
+  }
+  const scores = {};
+  const values = [];
+  for (let v = d.scaleMin; v <= d.scaleMax; v++) values.push(v);
+  app.innerHTML = head + `
+    <div class="card">
+      ${d.criteria.map((c) => `<div class="crit" data-id="${c.id}">
+        <div class="lbl"><span>${esc(c.label)}</span><span class="val">–</span></div>
+        <div class="scale">${values.map((v) => `<button type="button" data-v="${v}">${v}</button>`).join('')}</div>
+      </div>`).join('')}
+      <p class="muted small">🔒 Il voto è segreto: nessuno, nemmeno gli organizzatori, vede i punteggi prima della chiusura.</p>
+    </div>
+    <div class="sticky"><button class="primary" id="send" disabled>Seleziona tutti i criteri</button></div>
+    <div id="err"></div>`;
+
+  const sendBtn = document.getElementById('send');
+  app.querySelectorAll('.crit').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-v]');
+      if (!b) return;
+      el.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x === b));
+      scores[el.dataset.id] = Number(b.dataset.v);
+      el.querySelector('.val').textContent = b.dataset.v;
+      const left = d.criteria.length - Object.keys(scores).length;
+      sendBtn.disabled = left > 0;
+      sendBtn.textContent = left > 0 ? `Mancano ${left} criteri` : 'Invia voto';
+    });
+  });
+
+  const dlg = document.getElementById('confirm');
+  sendBtn.onclick = () => {
+    document.getElementById('recap').innerHTML = d.criteria.map((c) => `${esc(c.label)}: <b>${scores[c.id]}</b>`).join('<br>');
+    dlg.showModal();
+  };
+  document.getElementById('cancel').onclick = () => dlg.close();
+  document.getElementById('ok').onclick = async () => {
+    dlg.close();
+    const r = await api('/api/judge/vote', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: d.competitor.code, scores }),
+    });
+    if (r.status !== 200) {
+      document.getElementById('err').innerHTML = `<div class="msg err">${esc(r.error || 'Errore')}</div>`;
+      return;
+    }
+    app.innerHTML = head + `<div class="card" style="text-align:center"><div class="done-ico">✅</div><h2>Voto registrato</h2><p class="muted">Grazie! Il voto è stato salvato in forma segreta.<br>Inquadra la prossima pettorina.</p></div><a class="btn ghost" href="/giudice" style="width:100%;text-align:center">Vedi elenco concorrenti</a>`;
+  };
+}
+
+main();
+</script>
+</body>
+</html>

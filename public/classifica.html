@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Classifica</title>
+<style>
+  :root { --accent: #e0553d; --gold: #e6b84a; --silver: #c9cdd2; --bronze: #c98a55; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% 0%, #3a2420, #120c0b 70%); color: #fff;
+         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+  h1 { text-align: center; font-size: clamp(1.6rem, 4vw, 3rem); margin: 0 0 6px; }
+  .sub { text-align: center; color: #c8b9b0; margin-bottom: 40px; font-size: 1.1rem; }
+  .sealed { text-align: center; margin-top: 12vh; }
+  .sealed .ico { font-size: 7rem; }
+  .sealed h2 { font-size: 2.2rem; margin: 10px 0; }
+  .row { display: grid; grid-template-columns: 80px 1fr auto; gap: 18px; align-items: center; padding: 16px 22px; margin-bottom: 10px;
+         background: rgba(255,255,255,.06); border-radius: 16px; font-size: 1.4rem; opacity: 0; transform: translateY(20px); transition: all .6s ease; }
+  .row.show { opacity: 1; transform: none; }
+  .row .pos { font-size: 2rem; font-weight: 900; text-align: center; }
+  .row .num { color: #c8b9b0; font-size: 1rem; }
+  .row .pts { font-weight: 800; font-size: 1.8rem; }
+  .row.p1 { background: linear-gradient(90deg, rgba(230,184,74,.35), rgba(230,184,74,.08)); font-size: 1.8rem; }
+  .row.p1 .pos { color: var(--gold); } .row.p2 .pos { color: var(--silver); } .row.p3 .pos { color: var(--bronze); }
+  .ctrl { text-align: center; margin-top: 30px; }
+  button { font: inherit; font-weight: 700; font-size: 1.1rem; padding: 14px 28px; border-radius: 12px; border: 0; background: var(--accent); color: #fff; cursor: pointer; }
+  .hint { color: #8d7f77; font-size: .9rem; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 id="title">🍕</h1>
+  <div class="sub" id="sub"></div>
+  <div id="out"></div>
+</div>
+<script>
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let shown = false;
+let revealed = 0;
+let rows = [];
+
+async function poll() {
+  const info = await fetch('/api/info').then((r) => r.json()).catch(() => null);
+  if (!info) return;
+  document.getElementById('title').textContent = '🍕 ' + info.name;
+  if (info.eventStatus !== 'revealed') {
+    shown = false;
+    document.getElementById('sub').textContent = '';
+    document.getElementById('out').innerHTML = `<div class="sealed"><div class="ico">${info.eventStatus === 'open' ? '🗳️' : '🔒'}</div>
+      <h2>${info.eventStatus === 'open' ? 'Votazione in corso' : 'Votazione chiusa'}</h2>
+      <div class="sub">I voti dei giudici sono segreti. La classifica verrà svelata a breve.</div></div>`;
+    return;
+  }
+  if (shown) return;
+  shown = true;
+  const res = await fetch('/api/results').then((r) => r.json());
+  rows = res.ranking;
+  revealed = 0;
+  document.getElementById('sub').textContent = 'Classifica finale';
+  document.getElementById('out').innerHTML = rows.map((r) => `<div class="row p${r.position}">
+      <div class="pos">${r.position}°</div>
+      <div><div>${esc(r.name)}</div><div class="num">Pettorina #${esc(r.number)} · ${r.votes} voti</div></div>
+      <div class="pts">${r.total}</div></div>`).join('') +
+    `<div class="ctrl"><button id="next">Svela il prossimo</button><div class="hint">Premi spazio o il pulsante: si parte dall'ultimo posto.</div></div>`;
+  document.getElementById('next').onclick = next;
+}
+
+function next() {
+  const els = document.querySelectorAll('.row');
+  if (revealed >= els.length) return;
+  els[els.length - 1 - revealed].classList.add('show');
+  revealed++;
+  if (revealed === els.length) document.querySelector('.ctrl').innerHTML = '<div style="font-size:3rem">🏆🎉</div>';
+}
+document.addEventListener('keydown', (e) => { if (e.code === 'Space' || e.code === 'ArrowRight') { e.preventDefault(); next(); } });
+
+poll();
+setInterval(poll, 3000);
+</script>
+</body>
+</html>

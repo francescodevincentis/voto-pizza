@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Regia votazione</title>
+<link rel="stylesheet" href="/style.css">
+<style>
+  header.bar-top { background: var(--ink); color: #fff; }
+  header.bar-top .wrap { padding-bottom: 20px; }
+  header.bar-top .muted { color: #cfc6bd; }
+  .big { font-size: 2rem; font-weight: 800; }
+  .matrix td.c { text-align: center; }
+  .matrix th.j { text-align: center; font-size: .7rem; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
+  .lock { font-size: 3rem; text-align: center; }
+  .crit-row { display: grid; grid-template-columns: 1fr 90px 36px; gap: 8px; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<section id="login" class="wrap narrow hidden">
+  <div class="card" style="margin-top:40px">
+    <h1>🍕 Regia votazione</h1>
+    <p class="muted">Accesso riservato all'organizzazione.</p>
+    <form id="loginForm" class="row">
+      <input type="password" id="pwd" class="grow" placeholder="Password admin" autofocus>
+      <button class="primary">Entra</button>
+    </form>
+    <div id="loginErr"></div>
+  </div>
+</section>
+
+<section id="main" class="hidden">
+  <header class="bar-top">
+    <div class="wrap">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted small">REGIA</div>
+          <h1 id="evName" style="margin:0"></h1>
+        </div>
+        <div class="row">
+          <span id="statusPill" class="pill"></span>
+          <a class="btn ghost" style="color:#fff;border-color:#555" href="/stampa" target="_blank">🖨️ Stampa QR</a>
+          <a class="btn ghost" style="color:#fff;border-color:#555" href="/classifica" target="_blank">📺 Schermo classifica</a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div id="flash"></div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted small">VOTI RICEVUTI</div>
+          <div class="big"><span id="vc">0</span> <span class="muted" style="font-size:1rem">su <span id="ve">0</span> attesi</span></div>
+        </div>
+        <div class="row" id="actions"></div>
+      </div>
+      <div class="bar" style="margin-top:10px"><i id="vbar" style="width:0"></i></div>
+    </div>
+
+    <div class="card" id="rankingCard">
+      <div id="rankingBody"></div>
+    </div>
+
+    <div class="card">
+      <h2>Avanzamento per concorrente</h2>
+      <p class="muted small">Vedi solo <b>chi ha votato</b>, mai il punteggio: i voti restano segreti fino alla rivelazione.</p>
+      <div style="overflow-x:auto"><table class="matrix" id="matrix"></table></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Concorrenti</h2>
+        <form id="addComp" class="row" style="margin-bottom:10px">
+          <input name="number" placeholder="N°" style="width:70px">
+          <input name="name" class="grow" placeholder="Nome concorrente / pizzeria" required>
+          <button>Aggiungi</button>
+        </form>
+        <table id="compTable"></table>
+      </div>
+
+      <div class="card">
+        <h2>Giudici</h2>
+        <form id="addJudge" class="row" style="margin-bottom:10px">
+          <input name="name" class="grow" placeholder="Nome giudice" required>
+          <button>Aggiungi</button>
+        </form>
+        <table id="judgeTable"></table>
+        <p class="muted small">Ogni giudice inquadra una volta il proprio badge (stampabile da “Stampa QR”) per abilitare il telefono.</p>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Criteri di valutazione</h2>
+        <p class="muted small">Il punteggio di ogni giudice è la media pesata dei criteri. Modificabili solo prima che arrivino voti.</p>
+        <div id="critList"></div>
+        <div class="row" style="margin:8px 0 14px">
+          <button class="ghost" id="addCrit" type="button">+ Criterio</button>
+        </div>
+        <div class="row">
+          <label>Scala da <input id="smin" type="number" style="width:70px"></label>
+          <label>a <input id="smax" type="number" style="width:70px"></label>
+          <button class="primary" id="saveCrit">Salva criteri</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Impostazioni</h2>
+        <label class="small muted">Nome evento</label>
+        <input id="setName" style="width:100%;margin-bottom:10px">
+        <label class="small muted">Indirizzo usato nei QR</label>
+        <input id="setBase" style="width:100%" placeholder="">
+        <p class="muted small" id="baseHint"></p>
+        <button class="primary" id="saveSettings">Salva</button>
+        <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+        <h2>Azzera</h2>
+        <p class="muted small">Cancella tutti i dati (voti compresi).</p>
+        <div class="row">
+          <button class="danger" id="resetEmpty">Azzera tutto</button>
+          <button class="danger" id="resetDemo">Azzera e carica demo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const STATUS = { open: 'Votazione aperta', closed: 'Votazione chiusa', revealed: 'Classifica rivelata' };
+let S = null;
+let critDraft = null;
+
+async function api(url, body) {
+  const r = await fetch(url, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  return { http: r.status, ...j };
+}
+function flash(text, ok) {
+  $('flash').innerHTML = `<div class="msg ${ok ? 'ok' : 'err'}">${esc(text)}</div>`;
+  setTimeout(() => { $('flash').innerHTML = ''; }, 4000);
+}
+async function act(url, body, okText) {
+  const r = await api(url, body);
+  if (r.http !== 200) flash(r.error || 'Errore'); else if (okText) flash(okText, true);
+  await load();
+}
+
+async function load() {
+  const r = await api('/api/admin/state');
+  if (r.http === 401) { $('login').classList.remove('hidden'); $('main').classList.add('hidden'); return; }
+  $('login').classList.add('hidden'); $('main').classList.remove('hidden');
+  S = r;
+  render();
+}
+
+function render() {
+  const ev = S.event;
+  document.title = 'Regia · ' + ev.name;
+  $('evName').textContent = ev.name;
+  $('statusPill').className = 'pill ' + ev.status;
+  $('statusPill').textContent = STATUS[ev.status];
+  $('vc').textContent = S.votesCount;
+  $('ve').textContent = S.expectedVotes;
+  $('vbar').style.width = (S.expectedVotes ? (S.votesCount / S.expectedVotes) * 100 : 0) + '%';
+
+  const A = $('actions');
+  A.innerHTML = '';
+  const btn = (label, cls, fn) => { const b = document.createElement('button'); b.textContent = label; b.className = cls; b.onclick = fn; A.appendChild(b); };
+  if (ev.status === 'open') btn('🔒 Chiudi votazione', 'primary', () => confirm('Chiudere la votazione? I giudici non potranno più votare.') && act('/api/admin/status', { status: 'closed' }, 'Votazione chiusa'));
+  if (ev.status === 'closed') {
+    btn('Riapri', 'ghost', () => act('/api/admin/status', { status: 'open' }, 'Votazione riaperta'));
+    btn('🏆 Rivela classifica', 'primary', () => confirm('Rivelare la classifica? Da questo momento i punteggi saranno visibili.') && act('/api/admin/status', { status: 'revealed' }, 'Classifica rivelata'));
+  }
+  if (ev.status === 'revealed') btn('Nascondi classifica', 'ghost', () => act('/api/admin/status', { status: 'closed' }));
+
+  // Classifica (solo dopo la rivelazione)
+  if (!S.ranking) {
+    $('rankingBody').innerHTML = `<div class="lock">🔒</div><h2 style="text-align:center">Classifica sigillata</h2>
+      <p class="muted" style="text-align:center">I punteggi non sono visibili a nessuno finché non chiudi la votazione e premi “Rivela classifica”.</p>`;
+  } else {
+    $('rankingBody').innerHTML = `<div class="row" style="justify-content:space-between"><h2>🏆 Classifica finale</h2><a class="btn ghost" href="/api/admin/export.csv">Scarica CSV</a></div>
+      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>N°</th><th>Concorrente</th><th>Totale</th><th>Media</th><th>Voti</th>${ev.criteria.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr>
+      ${S.ranking.map((r) => `<tr><td><b>${r.position}°</b></td><td>#${esc(r.number)}</td><td>${esc(r.name)}</td><td><b>${r.total}</b></td><td>${r.average}</td><td>${r.votes}</td>${ev.criteria.map((c) => `<td>${r.perCriterion[c.id]}</td>`).join('')}</tr>`).join('')}
+      </table></div><p class="muted small">Totale = somma dei punteggi dei giudici (ogni punteggio è la media pesata dei criteri). Colonne criteri = media dei giudici.</p>`;
+  }
+
+  // Matrice avanzamento
+  $('matrix').innerHTML = `<tr><th>Concorrente</th>${S.judges.map((j) => `<th class="j">${esc(j.name)}</th>`).join('')}<th>Voti</th></tr>` +
+    S.competitors.map((c) => `<tr><td>#${esc(c.number)} ${esc(c.name)}</td>${S.judges.map((j) => `<td class="c"><span class="dot ${c.judgesVoted.includes(j.id) ? 'on' : ''}" style="display:inline-block"></span></td>`).join('')}<td>${c.judgesVoted.length}/${S.judges.length}</td></tr>`).join('');
+
+  $('compTable').innerHTML = S.competitors.map((c) => `<tr><td>#${esc(c.number)}</td><td>${esc(c.name)}</td><td><a href="${S.base}/v/${c.code}" target="_blank" class="small">link</a></td><td style="text-align:right"><button class="ghost small" data-del-comp="${c.id}">✕</button></td></tr>`).join('');
+  $('judgeTable').innerHTML = S.judges.map((j) => `<tr><td>${esc(j.name)}</td><td><a href="${S.base}/j/${j.token}" target="_blank" class="small">link badge</a></td><td style="text-align:right"><button class="ghost small" data-del-judge="${j.id}">✕</button></td></tr>`).join('');
+
+  if (!critDraft) critDraft = ev.criteria.map((c) => ({ ...c }));
+  renderCrit();
+  $('smin').value = ev.scaleMin; $('smax').value = ev.scaleMax;
+  if (document.activeElement !== $('setName')) $('setName').value = ev.name;
+  if (document.activeElement !== $('setBase')) $('setBase').value = ev.baseUrl;
+  $('setBase').placeholder = S.suggestedBase;
+  $('baseHint').innerHTML = `Lascia vuoto per usare l'indirizzo con cui hai aperto questa pagina (ora: <code>${esc(S.base)}</code>). Per i telefoni sulla stessa Wi-Fi usa <code>${esc(S.suggestedBase)}</code>; per un evento reale l'indirizzo pubblico del server.`;
+}
+
+function renderCrit() {
+  $('critList').innerHTML = critDraft.map((c, i) => `<div class="crit-row">
+    <input data-ci="${i}" data-k="label" value="${esc(c.label)}" placeholder="Criterio">
+    <input data-ci="${i}" data-k="weight" type="number" step="0.5" min="0.5" value="${c.weight}" title="Peso">
+    <button class="ghost" data-rm="${i}" type="button">✕</button></div>`).join('') +
+    '<div class="muted small">Colonna centrale = peso del criterio.</div>';
+}
+
+$('critList').addEventListener('input', (e) => {
+  const i = e.target.dataset.ci; if (i == null) return;
+  critDraft[i][e.target.dataset.k] = e.target.dataset.k === 'weight' ? Number(e.target.value) : e.target.value;
+});
+$('critList').addEventListener('click', (e) => {
+  if (e.target.dataset.rm != null) { critDraft.splice(Number(e.target.dataset.rm), 1); renderCrit(); }
+});
+$('addCrit').onclick = () => { critDraft.push({ label: '', weight: 1 }); renderCrit(); };
+$('saveCrit').onclick = async () => {
+  await act('/api/admin/settings', { criteria: critDraft, scaleMin: Number($('smin').value), scaleMax: Number($('smax').value) }, 'Criteri salvati');
+  critDraft = S.event.criteria.map((c) => ({ ...c })); renderCrit();
+};
+$('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value }, 'Impostazioni salvate');
+
+$('addComp').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/competitor', { number: f.number.value, name: f.name.value }); f.reset(); };
+$('addJudge').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/judge', { name: f.name.value }); f.reset(); };
+document.addEventListener('click', (e) => {
+  const c = e.target.dataset.delComp, j = e.target.dataset.delJudge;
+  if (c && confirm('Eliminare il concorrente?')) act('/api/admin/competitor/delete', { id: c });
+  if (j && confirm('Eliminare il giudice?')) act('/api/admin/judge/delete', { id: j });
+});
+$('resetEmpty').onclick = () => confirm('Cancellare TUTTI i dati, voti compresi?') && act('/api/admin/reset', {}, 'Dati azzerati').then(() => { critDraft = null; load(); });
+$('resetDemo').onclick = () => confirm('Cancellare tutto e ricaricare i dati demo?') && act('/api/admin/reset', { demo: true }, 'Demo caricata').then(() => { critDraft = null; load(); });
+
+$('loginForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await api('/api/admin/login', { password: $('pwd').value });
+  if (r.http !== 200) $('loginErr').innerHTML = `<div class="msg err">${esc(r.error)}</div>`; else load();
+};
+
+load();
+setInterval(() => { if (S && !document.querySelector('input:focus')) load(); }, 4000);
+</script>
+</body>
+</html>

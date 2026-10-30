@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stampa QR</title>
+<link rel="stylesheet" href="/style.css">
+<script src="/qrcode.js"></script>
+<style>
+  .sheet { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12mm; }
+  .tag { background: #fff; border: 2px solid var(--ink); border-radius: 6mm; padding: 8mm; text-align: center; break-inside: avoid; }
+  .tag .ev { font-size: 10pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .tag .num { font-size: 54pt; font-weight: 900; line-height: 1; color: var(--accent); margin: 3mm 0; }
+  .tag .name { font-size: 13pt; font-weight: 600; margin-bottom: 4mm; }
+  .tag .qr svg { width: 55mm; height: 55mm; }
+  .tag .hint { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
+  .tag.judge { border-style: dashed; }
+  .tag.judge .num { font-size: 22pt; color: var(--ink); }
+  .tag .warn { font-size: 8pt; color: var(--accent); font-weight: 700; margin-top: 2mm; }
+  h2.section { margin: 30px 0 14px; }
+  @media print {
+    .noprint { display: none !important; }
+    body { background: #fff; }
+    .wrap { max-width: none; padding: 0; }
+    h2.section { break-before: page; margin-top: 0; }
+    h2.section.first { break-before: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="noprint card">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <h1>🖨️ Stampa QR</h1>
+        <p class="muted" id="baseInfo" style="margin:0"></p>
+      </div>
+      <div class="row">
+        <a class="btn ghost" href="/admin">← Regia</a>
+        <button class="primary" onclick="window.print()">Stampa</button>
+      </div>
+    </div>
+  </div>
+  <div id="out"><p class="muted">Caricamento…</p></div>
+</div>
+<script>
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function qr(text) {
+  const q = qrcode(0, 'M');
+  q.addData(text);
+  q.make();
+  return q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+}
+(async () => {
+  const r = await fetch('/api/admin/state');
+  if (r.status === 401) { location.href = '/admin'; return; }
+  const S = await r.json();
+  document.getElementById('baseInfo').innerHTML = `I QR puntano a <code>${esc(S.base)}</code>. Se i telefoni non lo raggiungono, cambia l'indirizzo in Regia → Impostazioni.`;
+  const ev = esc(S.event.name);
+  document.getElementById('out').innerHTML = `
+    <h2 class="section first">Pettorine concorrenti</h2>
+    <div class="sheet">${S.competitors.map((c) => `<div class="tag">
+      <div class="ev">${ev}</div>
+      <div class="num">${esc(c.number)}</div>
+      <div class="name">${esc(c.name)}</div>
+      <div class="qr">${qr(`${S.base}/v/${c.code}`)}</div>
+      <div class="hint">Giudici: inquadrate per votare</div>
+    </div>`).join('')}</div>
+    <h2 class="section">Badge giudici (personali, da non condividere)</h2>
+    <div class="sheet">${S.judges.map((j) => `<div class="tag judge">
+      <div class="ev">${ev}</div>
+      <div class="num">${esc(j.name)}</div>
+      <div class="qr">${qr(`${S.base}/j/${j.token}`)}</div>
+      <div class="hint">Inquadra una sola volta per abilitare il tuo telefono al voto</div>
+      <div class="warn">PERSONALE · NON CONDIVIDERE</div>
+    </div>`).join('')}</div>`;
+})();
+</script>
+</body>
+</html>
