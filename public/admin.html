@@ -66,6 +66,14 @@
     </div>
 
     <div class="card">
+      <h2>Bonus / malus</h2>
+      <p class="muted small">Modifica al volo il punteggio di un concorrente: il valore si somma al totale dei giudici in classifica. Ogni modifica resta nello storico e si può annullare.</p>
+      <input id="adjNote" style="width:100%;margin-bottom:10px" placeholder="Motivo (facoltativo), es. fuori tempo, penalità igiene…">
+      <div style="overflow-x:auto"><table id="adjTable"></table></div>
+      <div id="adjLog"></div>
+    </div>
+
+    <div class="card">
       <h2>Avanzamento per concorrente</h2>
       <p class="muted small">Vedi solo <b>chi ha votato</b>, mai il punteggio: i voti restano segreti fino alla rivelazione.</p>
       <div style="overflow-x:auto"><table class="matrix" id="matrix"></table></div>
@@ -76,10 +84,16 @@
         <h2>Concorrenti</h2>
         <form id="addComp" class="row" style="margin-bottom:10px">
           <input name="number" placeholder="N°" style="width:70px">
-          <input name="name" class="grow" placeholder="Nome concorrente / pizzeria" required>
+          <input name="name" class="grow" placeholder="Nome (facoltativo, i giudici non lo vedono)">
           <button>Aggiungi</button>
         </form>
         <table id="compTable"></table>
+        <details style="margin-top:12px">
+          <summary class="small">Importa da Excel</summary>
+          <p class="muted small">Copia da Excel le colonne <b>Numero</b> e (se vuoi) <b>Nome</b> e incollale qui, una riga per concorrente. I numeri già presenti vengono aggiornati, non duplicati.</p>
+          <textarea id="importText" rows="5" style="width:100%" placeholder="01&#9;Pizzeria Da Mario&#10;02&#9;Pizzeria Bella Napoli"></textarea>
+          <button id="importBtn" type="button">Importa</button>
+        </details>
       </div>
 
       <div class="card">
@@ -184,10 +198,22 @@ function render() {
       <p class="muted" style="text-align:center">I punteggi non sono visibili a nessuno finché non chiudi la votazione e premi “Rivela classifica”.</p>`;
   } else {
     $('rankingBody').innerHTML = `<div class="row" style="justify-content:space-between"><h2>🏆 Classifica finale</h2><a class="btn ghost" href="/api/admin/export.csv">Scarica CSV</a></div>
-      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>N°</th><th>Concorrente</th><th>Totale</th><th>Media</th><th>Voti</th>${ev.criteria.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr>
-      ${S.ranking.map((r) => `<tr><td><b>${r.position}°</b></td><td>#${esc(r.number)}</td><td>${esc(r.name)}</td><td><b>${r.total}</b></td><td>${r.average}</td><td>${r.votes}</td>${ev.criteria.map((c) => `<td>${r.perCriterion[c.id]}</td>`).join('')}</tr>`).join('')}
-      </table></div><p class="muted small">Totale = somma dei punteggi dei giudici (ogni punteggio è la media pesata dei criteri). Colonne criteri = media dei giudici.</p>`;
+      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>N°</th><th>Concorrente</th><th>Giudici</th><th>Bonus</th><th>Totale</th><th>Media</th><th>Voti</th>${ev.criteria.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr>
+      ${S.ranking.map((r) => `<tr><td><b>${r.position}°</b></td><td>#${esc(r.number)}</td><td>${esc(r.name)}</td><td>${r.votesTotal}</td><td>${fmtDelta(r.bonus)}</td><td><b>${r.total}</b></td><td>${r.average}</td><td>${r.votes}</td>${ev.criteria.map((c) => `<td>${r.perCriterion[c.id]}</td>`).join('')}</tr>`).join('')}
+      </table></div><p class="muted small">Totale = somma dei punteggi dei giudici + bonus/malus (ogni punteggio è la media pesata dei criteri). Colonne criteri = media dei giudici.</p>`;
   }
+
+  // Bonus / malus
+  const bonusOf = (id) => S.adjustments.filter((a) => a.competitorId === id).reduce((a, x) => a + x.delta, 0);
+  $('adjTable').innerHTML = S.competitors.map((c) => `<tr><td><b>#${esc(c.number)}</b> <span class="muted small">${esc(c.name)}</span></td>
+    <td style="text-align:center;min-width:60px"><b>${fmtDelta(bonusOf(c.id))}</b></td>
+    <td style="text-align:right;white-space:nowrap"><button class="ghost" data-adj="${c.id}" data-delta="-2">−2</button> <button class="ghost" data-adj="${c.id}" data-delta="2">+2</button></td></tr>`).join('');
+  const byId = Object.fromEntries(S.competitors.map((c) => [c.id, c]));
+  const log = S.adjustments.slice().reverse();
+  $('adjLog').innerHTML = log.length ? `<h3 class="small muted" style="margin-top:14px">STORICO</h3><table>${log.map((a) => `<tr>
+    <td class="small muted">${new Date(a.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</td>
+    <td>#${esc(byId[a.competitorId] ? byId[a.competitorId].number : '?')}</td><td><b>${fmtDelta(a.delta)}</b></td>
+    <td class="small">${esc(a.note)}</td><td style="text-align:right"><button class="ghost small" data-undo="${a.id}">Annulla</button></td></tr>`).join('')}</table>` : '';
 
   // Matrice avanzamento
   $('matrix').innerHTML = `<tr><th>Concorrente</th>${S.judges.map((j) => `<th class="j">${esc(j.name)}</th>`).join('')}<th>Voti</th></tr>` +
@@ -204,6 +230,8 @@ function render() {
   $('setBase').placeholder = S.suggestedBase;
   $('baseHint').innerHTML = `Lascia vuoto per usare l'indirizzo con cui hai aperto questa pagina (ora: <code>${esc(S.base)}</code>). Per i telefoni sulla stessa Wi-Fi usa <code>${esc(S.suggestedBase)}</code>; per un evento reale l'indirizzo pubblico del server.`;
 }
+
+function fmtDelta(n) { return n > 0 ? '+' + n : n < 0 ? '−' + Math.abs(n) : '0'; }
 
 function renderCrit() {
   $('critList').innerHTML = critDraft.map((c, i) => `<div class="crit-row">
@@ -228,11 +256,25 @@ $('saveCrit').onclick = async () => {
 $('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value }, 'Impostazioni salvate');
 
 $('addComp').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/competitor', { number: f.number.value, name: f.name.value }); f.reset(); };
+$('importBtn').onclick = async () => {
+  const r = await api('/api/admin/competitor/import', { text: $('importText').value });
+  if (r.http !== 200) flash(r.error || 'Errore'); else { flash(`Importati ${r.added} nuovi, aggiornati ${r.updated}`, true); $('importText').value = ''; }
+  load();
+};
 $('addJudge').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/judge', { name: f.name.value }); f.reset(); };
 document.addEventListener('click', (e) => {
   const c = e.target.dataset.delComp, j = e.target.dataset.delJudge;
   if (c && confirm('Eliminare il concorrente?')) act('/api/admin/competitor/delete', { id: c });
   if (j && confirm('Eliminare il giudice?')) act('/api/admin/judge/delete', { id: j });
+  const adj = e.target.dataset.adj;
+  if (adj) {
+    const delta = Number(e.target.dataset.delta);
+    const c = S.competitors.find((x) => x.id === adj);
+    act('/api/admin/adjust', { competitorId: adj, delta, note: $('adjNote').value }, `${fmtDelta(delta)} al concorrente #${c ? c.number : ''}`);
+    $('adjNote').value = '';
+  }
+  const u = e.target.dataset.undo;
+  if (u && confirm('Annullare questo bonus/malus?')) act('/api/admin/adjust/delete', { id: u }, 'Modifica annullata');
 });
 $('resetEmpty').onclick = () => confirm('Cancellare TUTTI i dati, voti compresi?') && act('/api/admin/reset', {}, 'Dati azzerati').then(() => { critDraft = null; load(); });
 $('resetDemo').onclick = () => confirm('Cancellare tutto e ricaricare i dati demo?') && act('/api/admin/reset', { demo: true }, 'Demo caricata').then(() => { critDraft = null; load(); });
@@ -244,7 +286,7 @@ $('loginForm').onsubmit = async (e) => {
 };
 
 load();
-setInterval(() => { if (S && !document.querySelector('input:focus')) load(); }, 4000);
+setInterval(() => { if (S && !document.querySelector('input:focus, textarea:focus')) load(); }, 4000);
 </script>
 </body>
 </html>

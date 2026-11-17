@@ -62,7 +62,6 @@ function qr(text) {
     <div class="sheet">${S.competitors.map((c) => `<div class="tag">
       <div class="ev">${ev}</div>
       <div class="num">${esc(c.number)}</div>
-      <div class="name">${esc(c.name)}</div>
       <div class="qr">${qr(`${S.base}/v/${c.code}`)}</div>
       <div class="hint">Giudici: inquadrate per votare</div>
     </div>`).join('')}</div>

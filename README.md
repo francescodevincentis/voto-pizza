@@ -24,7 +24,17 @@ Al primo avvio vengono caricati dati demo: 8 concorrenti, 5 giudici, 5 criteri.
 
 ## Calcolo del punteggio
 - Punteggio di un giudice = media pesata dei criteri.
-- Totale concorrente = somma dei punteggi dei giudici (mostrata anche la media).
+- Totale concorrente = somma dei punteggi dei giudici + eventuali bonus/malus (mostrata anche la media).
+
+## Solo numeri per i giudici
+I giudici vedono solo il **numero** del concorrente (né sul telefono né sulla pettorina compare il nome).
+Il nome in Regia è facoltativo: l'abbinamento numero → nome può restare su un foglio Excel a parte,
+oppure si può incollare da Excel (Regia → Concorrenti → "Importa da Excel") per vederlo in classifica finale.
+
+## Bonus / malus al volo
+In Regia, riquadro **Bonus / malus**: pulsanti **+2 / −2** per ogni concorrente, con motivo facoltativo.
+Il valore si somma al totale dei giudici; ogni modifica resta nello storico e si può annullare.
+In classifica e nel CSV compaiono separati "Totale giudici", "Bonus/malus" e "Totale".
 
 ## Per la demo con i telefoni
 Il computer e i telefoni devono essere sulla **stessa Wi-Fi**. In Regia → Impostazioni

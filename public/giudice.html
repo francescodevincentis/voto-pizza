@@ -83,7 +83,7 @@ function homeScreen(me) {
       <h2>Concorrenti</h2>
       <p class="muted small">In alternativa al QR puoi toccare il concorrente dall'elenco.</p>
       ${me.competitors.map((c) => `<a href="/v/${c.code}">
-        <span><b>#${esc(c.number)}</b> ${esc(c.name)}</span>
+        <span><b>Concorrente #${esc(c.number)}</b></span>
         <span>${c.voted ? '<span class="pill open">Votato ✓</span>' : '<span class="muted">›</span>'}</span>
       </a>`).join('')}
     </div>`;
@@ -95,7 +95,7 @@ async function voteScreen(code) {
     app.innerHTML = `<div class="msg err">${esc(d.error || 'Errore')}</div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
     return;
   }
-  const head = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div><div style="font-weight:600;margin-top:6px">${esc(d.competitor.name)}</div></div>`;
+  const head = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div></div>`;
   if (d.voted) {
     app.innerHTML = head + `<div class="card" style="text-align:center"><div class="done-ico">🔒</div><h2>Hai già votato questo concorrente</h2><p class="muted">Il tuo voto è registrato e segreto.</p></div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
     return;
