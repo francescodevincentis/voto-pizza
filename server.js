@@ -36,6 +36,7 @@ function defaultState() {
     competitors: [], // { id, number, name, code }
     judges: [], // { id, name, token }
     votes: [], // { judgeId, competitorId, scores: {criterio: n}, total, at }
+    adjustments: [], // { id, competitorId, delta, note, at }  bonus/malus dell'organizzatore
   };
 }
 
@@ -47,6 +48,8 @@ try {
   seedDemo();
   save();
 }
+
+if (!Array.isArray(state.adjustments)) state.adjustments = [];
 
 function save() {
   fs.writeFileSync(DATA_FILE + '.tmp', JSON.stringify(state, null, 2));
@@ -63,9 +66,14 @@ function seedDemo() {
 }
 
 function addCompetitor(number, name) {
-  const c = { id: token(6), number: String(number), name: String(name), code: token(6) };
+  const c = { id: token(6), number: String(number), name: String(name || ''), code: token(6) };
   state.competitors.push(c);
   return c;
+}
+
+function nextNumber() {
+  const max = state.competitors.reduce((a, c) => Math.max(a, parseInt(c.number, 10) || 0), 0);
+  return String(max + 1).padStart(2, '0');
 }
 
 function addJudge(name) {
@@ -87,7 +95,9 @@ function weightedScore(scores) {
 function ranking() {
   const rows = state.competitors.map((c) => {
     const vs = state.votes.filter((v) => v.competitorId === c.id);
-    const total = vs.reduce((a, v) => a + v.total, 0);
+    const votesTotal = vs.reduce((a, v) => a + v.total, 0);
+    const bonus = state.adjustments.filter((a) => a.competitorId === c.id).reduce((a, x) => a + x.delta, 0);
+    const total = votesTotal + bonus;
     const perCriterion = {};
     for (const cr of state.event.criteria) {
       perCriterion[cr.id] = vs.length
@@ -98,8 +108,10 @@ function ranking() {
       number: c.number,
       name: c.name,
       votes: vs.length,
+      votesTotal: Math.round(votesTotal * 100) / 100,
+      bonus,
       total: Math.round(total * 100) / 100,
-      average: vs.length ? Math.round((total / vs.length) * 100) / 100 : 0,
+      average: vs.length ? Math.round((votesTotal / vs.length) * 100) / 100 : 0,
       perCriterion,
     };
   });
@@ -219,7 +231,8 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, {
           name: judge.name,
           event: { name: state.event.name, status: state.event.status },
-          competitors: state.competitors.map((c) => ({ number: c.number, name: c.name, code: c.code, voted: mine.includes(c.id) })),
+          // I giudici vedono solo il numero: il nome del concorrente non esce mai da qui.
+          competitors: state.competitors.map((c) => ({ number: c.number, code: c.code, voted: mine.includes(c.id) })),
         });
       }
       if (m === 'GET' && p.startsWith('/api/judge/competitor/')) {
@@ -227,7 +240,7 @@ const server = http.createServer(async (req, res) => {
         if (!c) return send(res, 404, { error: 'QR concorrente non valido' });
         const voted = state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id);
         return send(res, 200, {
-          competitor: { number: c.number, name: c.name, code: c.code },
+          competitor: { number: c.number, code: c.code },
           voted,
           eventStatus: state.event.status,
           criteria: state.event.criteria.map(({ id, label }) => ({ id, label })),
@@ -282,6 +295,7 @@ const server = http.createServer(async (req, res) => {
           suggestedBase: `http://${lanAddress()}:${PORT}`,
           competitors: progress,
           judges: state.judges,
+          adjustments: state.adjustments,
           votesCount: state.votes.length,
           expectedVotes: state.judges.length * state.competitors.length,
           ranking: ev.status === 'revealed' ? ranking() : null,
@@ -306,9 +320,40 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true });
       }
       if (m === 'POST' && p === '/api/admin/competitor') {
-        if (!String(body.name || '').trim()) return send(res, 400, { error: 'Nome obbligatorio' });
-        const number = String(body.number || '').trim() || String(state.competitors.length + 1).padStart(2, '0');
-        addCompetitor(number, String(body.name).trim());
+        // Il nome è facoltativo: l'abbinamento numero → nome può stare su un foglio Excel a parte.
+        const number = String(body.number || '').trim() || nextNumber();
+        if (state.competitors.some((c) => c.number === number)) return send(res, 409, { error: `Il numero ${number} esiste già.` });
+        addCompetitor(number, String(body.name || '').trim());
+        save();
+        return send(res, 200, { ok: true });
+      }
+      if (m === 'POST' && p === '/api/admin/competitor/import') {
+        // Righe incollate da Excel/CSV: "numero<TAB>nome", "numero;nome" o solo "numero".
+        let added = 0, updated = 0;
+        for (const line of String(body.text || '').split(/\r?\n/)) {
+          const [num, ...rest] = line.split(/[\t;,]/).map((x) => x.trim().replace(/^"|"$/g, ''));
+          if (!num || /^(n|n°|num|numero|#)$/i.test(num)) continue;
+          const name = rest.join(' ').trim();
+          const ex = state.competitors.find((c) => c.number === num);
+          if (ex) { if (name && ex.name !== name) { ex.name = name; updated++; } }
+          else { addCompetitor(num, name); added++; }
+        }
+        save();
+        return send(res, 200, { ok: true, added, updated });
+      }
+      if (m === 'POST' && p === '/api/admin/adjust') {
+        // Bonus/malus dell'organizzatore (es. +2 / -2), sommato al totale dei giudici.
+        const c = state.competitors.find((x) => x.id === body.competitorId);
+        if (!c) return send(res, 404, { error: 'Concorrente non trovato' });
+        const delta = Number(body.delta);
+        if (!Number.isFinite(delta) || delta === 0 || Math.abs(delta) > 100) return send(res, 400, { error: 'Valore non valido' });
+        state.adjustments.push({ id: token(6), competitorId: c.id, delta, note: String(body.note || '').trim().slice(0, 200), at: new Date().toISOString() });
+        save();
+        return send(res, 200, { ok: true });
+      }
+      if (m === 'POST' && p === '/api/admin/adjust/delete') {
+        const i = state.adjustments.findIndex((a) => a.id === body.id);
+        if (i >= 0) state.adjustments.splice(i, 1);
         save();
         return send(res, 200, { ok: true });
       }
@@ -320,7 +365,8 @@ const server = http.createServer(async (req, res) => {
       }
       if (m === 'POST' && (p === '/api/admin/competitor/delete' || p === '/api/admin/judge/delete')) {
         const isJudge = p.includes('judge');
-        if (state.votes.some((v) => (isJudge ? v.judgeId : v.competitorId) === body.id)) {
+        if (state.votes.some((v) => (isJudge ? v.judgeId : v.competitorId) === body.id) ||
+            (!isJudge && state.adjustments.some((a) => a.competitorId === body.id))) {
           return send(res, 409, { error: 'Ha già dei voti registrati: non si può eliminare.' });
         }
         const list = isJudge ? state.judges : state.competitors;
@@ -346,8 +392,8 @@ const server = http.createServer(async (req, res) => {
       }
       if (m === 'GET' && p === '/api/admin/export.csv') {
         if (ev.status !== 'revealed') return send(res, 403, 'Disponibile solo dopo la rivelazione');
-        const head = ['Posizione', 'Numero', 'Concorrente', 'Voti', 'Totale', 'Media', ...ev.criteria.map((c) => c.label)];
-        const lines = [head, ...ranking().map((r) => [r.position, r.number, r.name, r.votes, r.total, r.average, ...ev.criteria.map((c) => r.perCriterion[c.id])])];
+        const head = ['Posizione', 'Numero', 'Concorrente', 'Voti', 'Totale giudici', 'Bonus/malus', 'Totale', 'Media', ...ev.criteria.map((c) => c.label)];
+        const lines = [head, ...ranking().map((r) => [r.position, r.number, r.name, r.votes, r.votesTotal, r.bonus, r.total, r.average, ...ev.criteria.map((c) => r.perCriterion[c.id])])];
         const csv = lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
         return send(res, 200, '﻿' + csv, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="classifica.csv"' });
       }

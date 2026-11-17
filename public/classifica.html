@@ -60,7 +60,7 @@ async function poll() {
   document.getElementById('sub').textContent = 'Classifica finale';
   document.getElementById('out').innerHTML = rows.map((r) => `<div class="row p${r.position}">
       <div class="pos">${r.position}°</div>
-      <div><div>${esc(r.name)}</div><div class="num">Pettorina #${esc(r.number)} · ${r.votes} voti</div></div>
+      <div><div>${esc(r.name || 'Concorrente #' + r.number)}</div><div class="num">Pettorina #${esc(r.number)} · ${r.votes} voti${r.bonus ? ` · bonus/malus ${r.bonus > 0 ? '+' : ''}${r.bonus}` : ''}</div></div>
       <div class="pts">${r.total}</div></div>`).join('') +
     `<div class="ctrl"><button id="next">Svela il prossimo</button><div class="hint">Premi spazio o il pulsante: si parte dall'ultimo posto.</div></div>`;
   document.getElementById('next').onclick = next;
