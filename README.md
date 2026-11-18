@@ -8,7 +8,8 @@ Doppio clic su `avvia.command` (Mac), oppure da Terminale nella cartella:
 
     node server.js
 
-Poi apri **http://localhost:3000/admin** (password predefinita: `pizza2026`,
+Poi apri **http://localhost:3000/admin**: sul computer che fa girare l'app la regia si apre senza password.
+Da altri dispositivi o sul sito online serve la password (predefinita: `pizza2026`,
 cambiabile avviando con `ADMIN_PASSWORD=... node server.js` prima del primo avvio).
 Al primo avvio vengono caricati dati demo: 12 concorrenti in varie categorie, 3 giudici di gusto e 2 di forno.
 

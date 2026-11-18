@@ -223,8 +223,17 @@ function cookies(req) {
 }
 
 const adminSessions = new Set();
+// Sul computer che fa girare l'app (http://localhost:3000) la regia si apre senza password.
+// Da altri dispositivi e sul sito online la password resta, altrimenti chiunque potrebbe rivelare o azzerare.
+function isLocalRequest(req) {
+  const ip = req.socket.remoteAddress || '';
+  const loopback = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  const proxied = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers['x-forwarded-host'] || req.headers.forwarded;
+  const host = String(req.headers.host || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
+  return loopback && !proxied && ['localhost', '127.0.0.1', '::1'].includes(host);
+}
 function isAdmin(req) {
-  return adminSessions.has(cookies(req).admin);
+  return isLocalRequest(req) || adminSessions.has(cookies(req).admin);
 }
 function judgeFromReq(req) {
   const t = cookies(req).judge;
@@ -538,5 +547,5 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('\n  🍕 Voto Pizza avviato\n');
   console.log(`  Pannello admin (su questo computer): http://localhost:${PORT}/admin`);
   console.log(`  Indirizzo per i telefoni (stessa Wi-Fi): ${lan}`);
-  console.log(`  Password admin: ${state.adminPassword}\n`);
+  console.log(`  Password admin (solo da altri dispositivi): ${state.adminPassword}\n`);
 });
