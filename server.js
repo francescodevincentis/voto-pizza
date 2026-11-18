@@ -90,6 +90,7 @@ function defaultState() {
       checkPoints: 5,
       teamSize: 4, // massimo concorrenti per team
       teams: defaultTeams(),
+      teamExcluded: ['chef', 'genio-e-follia', 'napoletana'], // gare che non contano per la squadra
       rules: DEFAULT_RULES,
       categories: parseRules(DEFAULT_RULES).categories,
     },
@@ -122,6 +123,7 @@ if (typeof state.event.rules === 'string' && state.event.rules.includes('forno Â
   save();
 }
 if (!Array.isArray(state.event.teams)) { state.event.teams = defaultTeams(); state.event.teamSize = 4; }
+if (!Array.isArray(state.event.teamExcluded)) state.event.teamExcluded = ['chef', 'genio-e-follia', 'napoletana'];
 for (const j of state.judges) if (!ROLES[j.role]) j.role = 'gusto';
 // Versione con una sola categoria per concorrente -> elenco di gare.
 for (const c of state.competitors) {
@@ -262,10 +264,14 @@ function ranking() {
   return out.filter((g) => g.rows.length);
 }
 
-// Classifica a squadre: punteggio del team = somma dei totali dei suoi concorrenti in tutte le gare.
+// Classifica a squadre: punteggio del team = somma dei totali dei suoi concorrenti nelle gare che contano
+// per la squadra (Chef, Genio e follia e Napoletana sono escluse di default).
 function teamRanking() {
   const totals = {};
-  for (const g of ranking()) for (const r of g.rows) totals[r.number] = (totals[r.number] || 0) + r.total;
+  for (const g of ranking()) {
+    if (!g.id || state.event.teamExcluded.includes(g.id)) continue;
+    for (const r of g.rows) totals[r.number] = (totals[r.number] || 0) + r.total;
+  }
   const rows = state.event.teams.map((t) => {
     const members = state.competitors.filter((c) => c.teamId === t.id);
     return {
@@ -537,6 +543,7 @@ const server = http.createServer(async (req, res) => {
           if (used.length) return send(res, 409, { error: `${used[0].name} ha concorrenti: non si puÃ² togliere.` });
           ev.teams = names.map((name, i) => ({ id: (ev.teams[i] || {}).id || 't' + token(4), name }));
         }
+        if (Array.isArray(body.teamExcluded)) ev.teamExcluded = body.teamExcluded.map(String);
         if (body.teamSize != null) {
           const n = Number(body.teamSize);
           if (!Number.isInteger(n) || n < 1) return send(res, 400, { error: 'Numero massimo per team non valido' });

@@ -144,6 +144,8 @@
         <label class="small muted">Team (uno per riga; cambiare il nome non sposta i concorrenti)</label>
         <textarea id="setTeams" rows="6" style="width:100%"></textarea>
         <label class="small muted">Massimo concorrenti per team <input id="setTeamSize" type="number" min="1" style="width:70px"></label>
+        <div class="small muted" style="margin-top:10px">Gare che contano per la classifica a squadre:</div>
+        <div id="setTeamCats" class="small" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px"></div>
         <div style="margin-top:10px"><button class="primary" id="saveSettings">Salva</button></div>
         <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
         <h2>Azzera</h2>
@@ -220,9 +222,9 @@ function render() {
       </table></div>`).join('')}
       <p class="muted small">Totale = somma dei punti di tutti i giudici (gusto + forno, lista di controllo compresa) + bonus/malus, che è conteggiato ma non mostrato. Colonne dei criteri = media dei voti dei giudici.</p>
       ${S.teamRanking && S.teamRanking.length ? `<h3 class="cat">👥 Classifica a squadre</h3>
-      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>Team</th><th>Totale</th><th>Concorrenti (totale di ciascuno, tutte le gare)</th></tr>
+      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>Team</th><th>Totale</th><th>Concorrenti (punti portati alla squadra)</th></tr>
       ${S.teamRanking.map((t) => `<tr><td><b>${t.position}°</b></td><td>${esc(t.name)}</td><td><b>${t.total}</b></td><td class="small">${t.members.map((m) => `#${esc(m.number)} ${esc(m.name)} (${m.total})`).join(' · ')}</td></tr>`).join('')}
-      </table></div><p class="muted small">Punteggio del team = somma dei totali dei suoi concorrenti in tutte le gare.</p>` : ''}`;
+      </table></div><p class="muted small">Punteggio del team = somma dei totali dei suoi concorrenti nelle gare che contano per la squadra (escluse: ${esc(ev.teamExcluded.map(catName).filter(Boolean).join(', ') || 'nessuna')}).</p>` : ''}`;
   }
 
   // Bonus / malus
@@ -254,6 +256,7 @@ function render() {
   if (document.activeElement !== $('addCompTeam')) { const v = $('addCompTeam').value; $('addCompTeam').innerHTML = teamOptions(v); if ($('addCompTeam').selectedOptions[0] && $('addCompTeam').selectedOptions[0].disabled) $('addCompTeam').value = ''; }
   if (document.activeElement !== $('setTeams')) $('setTeams').value = ev.teams.map((t) => t.name).join('\n');
   if (document.activeElement !== $('setTeamSize')) $('setTeamSize').value = ev.teamSize;
+  if (!$('setTeamCats').contains(document.activeElement)) $('setTeamCats').innerHTML = ev.categories.map((k) => `<label><input type="checkbox" value="${esc(k.id)}" ${ev.teamExcluded.includes(k.id) ? '' : 'checked'}> ${esc(k.name)}</label>`).join('');
   const catOptions = (sel, skip = [], first = '— gara —') => `<option value="">${first}</option>` + ev.categories.filter((k) => !skip.includes(k.id)).map((k) => `<option value="${esc(k.id)}" ${k.id === sel ? 'selected' : ''}>${esc(k.name)}</option>`).join('');
   if (document.activeElement !== $('addCompCat')) { const v = $('addCompCat').value; $('addCompCat').innerHTML = catOptions(v); }
   // Gare del concorrente: una pillola per gara (✕ per toglierla) + menu per aggiungerne un'altra.
@@ -286,7 +289,7 @@ $('saveRules').onclick = async () => {
   rulesDraft = null;
   load();
 };
-$('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value, teams: $('setTeams').value.split('\n'), teamSize: Number($('setTeamSize').value) }, 'Impostazioni salvate');
+$('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value, teams: $('setTeams').value.split('\n'), teamSize: Number($('setTeamSize').value), teamExcluded: [...$('setTeamCats').querySelectorAll('input:not(:checked)')].map((x) => x.value) }, 'Impostazioni salvate');
 
 $('addComp').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/competitor', { number: f.number.value, name: f.name.value, categoryId: f.categoryId.value, teamId: f.teamId.value }); f.number.value = ''; f.name.value = ''; };
 $('importBtn').onclick = async () => {
