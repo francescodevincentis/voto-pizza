@@ -54,7 +54,7 @@ oppure si può incollare da Excel (Regia → Concorrenti → "Importa da Excel")
 ## Bonus / malus al volo
 In Regia, riquadro **Bonus / malus**: pulsanti **+2 / −2** per ogni concorrente, con motivo facoltativo.
 Il valore si somma al totale dei giudici; ogni modifica resta nello storico e si può annullare.
-In classifica e nel CSV compaiono separati "Totale giudici", "Bonus/malus" e "Totale".
+Il bonus/malus è conteggiato nel totale ma **non si vede** in classifica, sullo schermo né nel CSV: compare solo nel riquadro Bonus/malus della regia.
 
 ## Per la demo con i telefoni
 Il computer e i telefoni devono essere sulla **stessa Wi-Fi**. In Regia → Impostazioni

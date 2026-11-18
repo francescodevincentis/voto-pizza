@@ -77,7 +77,7 @@
 
     <div class="card">
       <h2>Bonus / malus</h2>
-      <p class="muted small">Modifica al volo il punteggio di un concorrente: il valore si somma al totale dei giudici in classifica. Ogni modifica resta nello storico e si può annullare.</p>
+      <p class="muted small">Modifica al volo il punteggio di un concorrente in una gara: ogni clic vale ±2 e si somma al totale. <b>Non compare in classifica, sullo schermo né nel CSV</b>: lo vedi solo qui. Ogni modifica resta nello storico e si può annullare.</p>
       <input id="adjNote" style="width:100%;margin-bottom:10px" placeholder="Motivo (facoltativo), es. fuori tempo, penalità igiene…">
       <div style="overflow-x:auto"><table id="adjTable"></table></div>
       <div id="adjLog"></div>
@@ -211,10 +211,10 @@ function render() {
   } else {
     $('rankingBody').innerHTML = `<div class="row" style="justify-content:space-between"><h2>🏆 Classifiche per categoria</h2><a class="btn ghost" href="/api/admin/export.csv">Scarica CSV</a></div>
       ${S.ranking.map((g) => `<h3 class="cat">${esc(g.name)}</h3>
-      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>N°</th><th>Concorrente</th><th>Gusto</th><th>Forno</th><th>Bonus</th><th>Totale</th><th>Voti</th>${g.criteria.map((c) => `<th title="${c.role}">${esc(c.label)}</th>`).join('')}</tr>
-      ${g.rows.map((r) => `<tr><td><b>${r.position}°</b></td><td>#${esc(r.number)}</td><td>${esc(r.name)}</td><td>${r.gusto}</td><td>${r.forno}</td><td>${fmtDelta(r.bonus)}</td><td><b>${r.total}</b></td><td>${r.votes}</td>${g.criteria.map((c) => `<td>${r.perCriterion[c.id] ?? '–'}</td>`).join('')}</tr>`).join('')}
+      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>N°</th><th>Concorrente</th><th>Totale</th><th>Voti</th>${g.criteria.map((c) => `<th title="Media dei giudici di ${c.role}">${esc(c.label)}<br><span style="text-transform:none;font-weight:400">media</span></th>`).join('')}</tr>
+      ${g.rows.map((r) => `<tr><td><b>${r.position}°</b></td><td>#${esc(r.number)}</td><td>${esc(r.name)}</td><td><b>${r.total}</b></td><td>${r.votes}</td>${g.criteria.map((c) => `<td>${r.perCriterion[c.id] ?? '–'}</td>`).join('')}</tr>`).join('')}
       </table></div>`).join('')}
-      <p class="muted small">Totale = somma dei punti di tutti i giudici (gusto + forno, lista di controllo compresa) + bonus/malus. Colonne dei criteri = media dei giudici.</p>`;
+      <p class="muted small">Totale = somma dei punti di tutti i giudici (gusto + forno, lista di controllo compresa) + bonus/malus, che è conteggiato ma non mostrato. Colonne dei criteri = media dei voti dei giudici.</p>`;
   }
 
   // Bonus / malus

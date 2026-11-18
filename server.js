@@ -218,6 +218,15 @@ function ranking() {
   return out.filter((g) => g.rows.length);
 }
 
+// Il bonus/malus conta nel totale ma non si mostra mai: niente colonna bonus né subtotali gusto/forno
+// (da cui si potrebbe ricavare per differenza).
+function publicRanking() {
+  return ranking().map((g) => ({
+    ...g,
+    rows: g.rows.map(({ number, name, votes, total, perCriterion, position }) => ({ number, name, votes, total, perCriterion, position })),
+  }));
+}
+
 // ---------- Helpers HTTP ----------
 function send(res, status, body, headers = {}) {
   const isObj = typeof body === 'object' && !Buffer.isBuffer(body);
@@ -326,7 +335,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (m === 'GET' && p === '/api/results') {
       if (state.event.status !== 'revealed') return send(res, 403, { error: 'Classifica non ancora rivelata', eventStatus: state.event.status });
-      return send(res, 200, { name: state.event.name, categories: ranking() });
+      return send(res, 200, { name: state.event.name, categories: publicRanking() });
     }
 
     // --- API giudice ---
@@ -452,7 +461,7 @@ const server = http.createServer(async (req, res) => {
           adjustments: state.adjustments,
           votesCount: state.votes.length,
           expectedVotes,
-          ranking: ev.status === 'revealed' ? ranking() : null,
+          ranking: ev.status === 'revealed' ? publicRanking() : null,
         });
       }
       if (m === 'POST' && p === '/api/admin/settings') {
@@ -586,11 +595,11 @@ const server = http.createServer(async (req, res) => {
         if (ev.status !== 'revealed') return send(res, 403, 'Disponibile solo dopo la rivelazione');
         // Una sezione per categoria, ognuna con le sue colonne di criteri (media dei giudici).
         const lines = [];
-        for (const g of ranking()) {
+        for (const g of publicRanking()) {
           if (lines.length) lines.push([]);
           lines.push([g.name.toUpperCase()]);
-          lines.push(['Posizione', 'Numero', 'Concorrente', 'Voti', 'Giudici gusto', 'Giudici forno', 'Bonus/malus', 'Totale', ...g.criteria.map((c) => c.label)]);
-          for (const r of g.rows) lines.push([r.position, r.number, r.name, r.votes, r.gusto, r.forno, r.bonus, r.total, ...g.criteria.map((c) => r.perCriterion[c.id] ?? '')]);
+          lines.push(['Posizione', 'Numero', 'Concorrente', 'Voti', 'Totale', ...g.criteria.map((c) => c.label + ' (media)')]);
+          for (const r of g.rows) lines.push([r.position, r.number, r.name, r.votes, r.total, ...g.criteria.map((c) => r.perCriterion[c.id] ?? '')]);
         }
         const csv = lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
         return send(res, 200, '﻿' + csv, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="classifica.csv"' });
