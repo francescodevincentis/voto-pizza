@@ -273,10 +273,25 @@ function teamCats() {
 }
 // Gara che il concorrente porta alla squadra: una sola, tra quelle valide per la squadra.
 // Se non è stata scelta e ne fa una sola valida, si usa quella.
+// I compagni dello stesso team devono portare gare diverse. Prima valgono le scelte esplicite; chi fa una sola
+// gara valida la prende in automatico, se nessun compagno (prima di lui nell'elenco) la porta già.
+function teamAssignments(teamId) {
+  const members = state.competitors.filter((x) => teamId && x.teamId === teamId);
+  const out = {};
+  const used = new Set();
+  for (const m of members) {
+    const valid = teamCats().filter((id) => m.categoryIds.includes(id));
+    if (m.teamCategoryId && valid.includes(m.teamCategoryId) && !used.has(m.teamCategoryId)) { out[m.id] = m.teamCategoryId; used.add(m.teamCategoryId); }
+  }
+  for (const m of members) {
+    if (out[m.id]) continue;
+    const valid = teamCats().filter((id) => m.categoryIds.includes(id));
+    if (valid.length === 1 && !used.has(valid[0])) { out[m.id] = valid[0]; used.add(valid[0]); } else out[m.id] = '';
+  }
+  return out;
+}
 function teamCatOf(c) {
-  const valid = teamCats().filter((id) => c.categoryIds.includes(id));
-  if (c.teamCategoryId && valid.includes(c.teamCategoryId)) return c.teamCategoryId;
-  return valid.length === 1 ? valid[0] : '';
+  return c.teamId ? teamAssignments(c.teamId)[c.id] || '' : '';
 }
 function teamRanking() {
   const totals = {}; // numero|gara -> totale
@@ -517,6 +532,7 @@ const server = http.createServer(async (req, res) => {
         const competitors = state.competitors.map((c) => ({
           ...c,
           teamCat: teamCatOf(c),
+          teamTaken: state.competitors.filter((x) => x.id !== c.id && c.teamId && x.teamId === c.teamId && teamCatOf(x)).map((x) => ({ id: teamCatOf(x), number: x.number })),
           votedCats: [...new Set(state.votes.filter((v) => v.competitorId === c.id).map((v) => v.categoryId))],
         }));
         // Una riga per iscrizione (concorrente + gara).
@@ -650,6 +666,8 @@ const server = http.createServer(async (req, res) => {
         if (typeof body.teamCategoryId === 'string') {
           const id = body.teamCategoryId;
           if (id && !teamCats().includes(id)) return send(res, 400, { error: 'Questa gara non conta per la squadra.' });
+          const mate = id && state.competitors.find((x) => x.id !== c.id && c.teamId && x.teamId === c.teamId && teamCatOf(x) === id);
+          if (mate) return send(res, 409, { error: `${catById(id).name} la porta già il #${mate.number} in questo team: scegli un'altra gara.` });
           if (id && !c.categoryIds.includes(id)) c.categoryIds.push(id); // la gara per la squadra è anche una sua gara
           c.teamCategoryId = id;
         }
@@ -657,6 +675,8 @@ const server = http.createServer(async (req, res) => {
           const err = teamError(body.teamId, c.id);
           if (err) return send(res, 409, { error: err });
           c.teamId = body.teamId;
+          // Nel nuovo team la sua gara per la squadra potrebbe essere già presa: va scelta di nuovo.
+          if (c.teamCategoryId && state.competitors.some((x) => x.id !== c.id && x.teamId === c.teamId && teamCatOf(x) === c.teamCategoryId)) c.teamCategoryId = '';
         }
         if (typeof body.name === 'string') c.name = body.name.trim();
         save();

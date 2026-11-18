@@ -43,7 +43,8 @@ Le categorie e i criteri stanno in Regia → **Regolamento**, un testo semplice 
 ## Team
 20 team precaricati (nomi modificabili in Regia → Impostazioni), **massimo 4 concorrenti ciascuno**, ogni concorrente in un solo team.
 In Regia → Concorrenti si sceglie il team da un menu: quelli già pieni non si possono selezionare.
-Ogni concorrente del team sceglie **una sola gara per la squadra** (menu sotto il team), tra quelle valide.
+Ogni concorrente del team sceglie **una sola gara per la squadra** (menu sotto il team), tra quelle valide,
+e **diversa da quella dei compagni** (le gare già prese nel team non si possono scegliere).
 Dopo la rivelazione c'è anche la **classifica a squadre**: punteggio del team = somma dei punti di ogni concorrente
 nella sua gara per la squadra. Le altre gare che fa restano individuali. **Chef, Genio e follia, Napoletana e Amatoriale non contano** (modificabile in Regia → Impostazioni).
 
