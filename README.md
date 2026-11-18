@@ -35,7 +35,10 @@ Le categorie e i criteri stanno in Regia → **Regolamento**, un testo semplice 
 
 - `gusto:` / `forno:` = criteri con voto da 1 a 100, per i giudici di gusto o di forno.
 - `forno ±5:` = lista di controllo: ogni voce rispettata vale +5, non rispettata −5.
-- Ogni concorrente ha una categoria e ogni giudice vede solo i criteri della categoria che spettano al suo ruolo.
+- Ogni concorrente può iscriversi a **più gare** (Regia → Concorrenti → "+ gara"), con una sola pettorina e un solo QR.
+  Quando il giudice inquadra la pettorina di chi fa più gare, il telefono gli chiede quale gara sta votando.
+  Voti, bonus/malus e classifica sono separati per ogni gara.
+- Ogni giudice vede solo i criteri della gara che spettano al suo ruolo.
 
 ## Calcolo del punteggio
 - Una **classifica separata per ogni categoria**.

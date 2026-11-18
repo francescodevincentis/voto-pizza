@@ -80,10 +80,10 @@ function defaultState() {
       rules: DEFAULT_RULES,
       categories: parseRules(DEFAULT_RULES).categories,
     },
-    competitors: [], // { id, number, name, categoryId, code }
+    competitors: [], // { id, number, name, categoryIds: [...], code }  un concorrente può iscriversi a più gare
     judges: [], // { id, name, role: 'gusto'|'forno', token }
-    votes: [], // { judgeId, competitorId, role, scores: {criterio: numero | true/false}, total, at }
-    adjustments: [], // { id, competitorId, delta, note, at }  bonus/malus dell'organizzatore
+    votes: [], // { judgeId, competitorId, categoryId, role, scores: {criterio: numero | true/false}, total, at }
+    adjustments: [], // { id, competitorId, categoryId, delta, note, at }  bonus/malus dell'organizzatore
   };
 }
 
@@ -98,7 +98,13 @@ try {
 
 if (!Array.isArray(state.adjustments)) state.adjustments = [];
 for (const j of state.judges) if (!ROLES[j.role]) j.role = 'gusto';
-for (const c of state.competitors) if (typeof c.categoryId !== 'string') c.categoryId = '';
+// Versione con una sola categoria per concorrente -> elenco di gare.
+for (const c of state.competitors) {
+  if (!Array.isArray(c.categoryIds)) c.categoryIds = c.categoryId ? [c.categoryId] : [];
+  delete c.categoryId;
+}
+for (const v of state.votes || []) if (!('categoryId' in v)) v.categoryId = (state.competitors.find((c) => c.id === v.competitorId) || { categoryIds: [''] }).categoryIds[0] || '';
+for (const a of state.adjustments) if (!('categoryId' in a)) a.categoryId = (state.competitors.find((c) => c.id === a.competitorId) || { categoryIds: [''] }).categoryIds[0] || '';
 // Dati della versione precedente (5 criteri, scala 1–10): passa al regolamento 2026.
 if (!Array.isArray(state.event.categories)) {
   const d = defaultState().event;
@@ -115,13 +121,16 @@ function save() {
 
 function seedDemo() {
   const cats = state.event.categories;
-  for (let i = 0; i < 12; i++) addCompetitor(String(i + 1).padStart(2, '0'), '', cats[i % cats.length].id);
+  for (let i = 0; i < 12; i++) addCompetitor(String(i + 1).padStart(2, '0'), '', [cats[i % cats.length].id]);
+  // Due concorrenti iscritti a più gare, per provare il caso.
+  state.competitors[0].categoryIds.push('napoletana');
+  state.competitors[2].categoryIds.push('genio-e-follia', 'ruota-di-carro');
   ['Gusto 1', 'Gusto 2', 'Gusto 3'].forEach((n) => addJudge(n, 'gusto'));
   ['Forno 1', 'Forno 2'].forEach((n) => addJudge(n, 'forno'));
 }
 
-function addCompetitor(number, name, categoryId) {
-  const c = { id: token(6), number: String(number), name: String(name || ''), categoryId: String(categoryId || ''), code: token(6) };
+function addCompetitor(number, name, categoryIds) {
+  const c = { id: token(6), number: String(number), name: String(name || ''), categoryIds: validCats(categoryIds), code: token(6) };
   state.competitors.push(c);
   return c;
 }
@@ -137,16 +146,25 @@ function addJudge(name, role) {
   return j;
 }
 
-function categoryOf(c) {
-  return state.event.categories.find((k) => k.id === c.categoryId) || null;
+function validCats(ids) {
+  const out = [];
+  for (const id of Array.isArray(ids) ? ids : [ids]) if (state.event.categories.some((k) => k.id === id) && !out.includes(id)) out.push(id);
+  return out;
 }
-// Criteri che un giudice deve valutare per un concorrente (dipendono da categoria e tipo di giudice).
-function criteriaFor(c, judge) {
-  const cat = categoryOf(c);
+function catById(id) {
+  return state.event.categories.find((k) => k.id === id) || null;
+}
+// Criteri che un giudice deve valutare per un concorrente in una gara (dipendono da categoria e tipo di giudice).
+function criteriaFor(catId, judge) {
+  const cat = catById(catId);
   return cat ? cat.criteria.filter((k) => k.role === judge.role) : [];
 }
-function mustVote(judge, c) {
-  return criteriaFor(c, judge).length > 0;
+// Gare di un concorrente che un giudice deve votare.
+function judgeCats(judge, c) {
+  return c.categoryIds.filter((id) => criteriaFor(id, judge).length > 0);
+}
+function hasVoted(judge, c, catId) {
+  return state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id && v.categoryId === catId);
 }
 function points(cr, v) {
   return cr.type === 'check' ? (v ? state.event.checkPoints : -state.event.checkPoints) : Number(v) || 0;
@@ -157,13 +175,19 @@ const r2 = (n) => Math.round(n * 100) / 100;
 function ranking() {
   const groups = state.event.categories.map((cat) => ({ id: cat.id, name: cat.name, criteria: cat.criteria, rows: [] }));
   const orphan = { id: '', name: 'Senza categoria', criteria: [], rows: [] };
+  const entries = [];
   for (const c of state.competitors) {
-    const g = groups.find((x) => x.id === c.categoryId) || orphan;
-    const vs = state.votes.filter((v) => v.competitorId === c.id);
+    const ids = c.categoryIds.filter((id) => catById(id));
+    if (!ids.length) entries.push([c, '']);
+    for (const id of ids) entries.push([c, id]);
+  }
+  for (const [c, catId] of entries) {
+    const g = groups.find((x) => x.id === catId) || orphan;
+    const vs = state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId);
     const votesTotal = vs.reduce((a, v) => a + v.total, 0);
     const byRole = { gusto: 0, forno: 0 };
     for (const v of vs) byRole[v.role] = (byRole[v.role] || 0) + v.total;
-    const bonus = state.adjustments.filter((a) => a.competitorId === c.id).reduce((a, x) => a + x.delta, 0);
+    const bonus = state.adjustments.filter((a) => a.competitorId === c.id && a.categoryId === catId).reduce((a, x) => a + x.delta, 0);
     const perCriterion = {};
     for (const cr of g.criteria) {
       const given = vs.filter((v) => cr.id in v.scores);
@@ -311,33 +335,44 @@ const server = http.createServer(async (req, res) => {
       if (!judge) return send(res, 401, { error: 'Telefono non registrato: inquadra prima il tuo badge giudice.' });
 
       if (m === 'GET' && p === '/api/judge/me') {
-        const mine = state.votes.filter((v) => v.judgeId === judge.id).map((v) => v.competitorId);
         return send(res, 200, {
           name: judge.name,
           role: judge.role,
           roleLabel: ROLES[judge.role],
           event: { name: state.event.name, status: state.event.status },
           // I giudici vedono solo numero e categoria: il nome del concorrente non esce mai da qui.
-          competitors: state.competitors.filter((c) => mustVote(judge, c)).map((c) => ({
-            number: c.number, code: c.code, category: (categoryOf(c) || {}).name || '', voted: mine.includes(c.id),
-          })),
+          // Una riga per ogni gara del concorrente che spetta a questo giudice.
+          competitors: state.competitors.flatMap((c) => judgeCats(judge, c).map((id) => ({
+            number: c.number, code: c.code, categoryId: id, category: catById(id).name, voted: hasVoted(judge, c, id),
+          }))),
         });
       }
       if (m === 'GET' && p.startsWith('/api/judge/competitor/')) {
         const c = state.competitors.find((x) => x.code === p.split('/').pop());
         if (!c) return send(res, 404, { error: 'QR concorrente non valido' });
-        const voted = state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id);
-        const cat = categoryOf(c);
-        const criteria = criteriaFor(c, judge);
-        if (!criteria.length) {
+        const mineCats = judgeCats(judge, c);
+        if (!mineCats.length) {
           return send(res, 409, {
-            error: cat
-              ? `La categoria "${cat.name}" non prevede voti dei ${ROLES[judge.role].toLowerCase()}i: questo concorrente non va votato da te.`
+            error: c.categoryIds.length
+              ? `Il concorrente #${c.number} gareggia in categorie che non prevedono voti dei ${ROLES[judge.role].toLowerCase()}i: non va votato da te.`
               : `Il concorrente #${c.number} non ha ancora una categoria: avvisa la regia.`,
           });
         }
+        const wanted = url.searchParams.get('cat');
+        // Più gare: il giudice sceglie quale sta valutando.
+        if (!wanted && mineCats.length > 1) {
+          return send(res, 200, {
+            competitor: { number: c.number, code: c.code },
+            choose: mineCats.map((id) => ({ id, name: catById(id).name, voted: hasVoted(judge, c, id) })),
+          });
+        }
+        const catId = wanted || mineCats[0];
+        if (!mineCats.includes(catId)) return send(res, 409, { error: 'Questa gara non va votata da te.' });
+        const cat = catById(catId);
+        const criteria = criteriaFor(catId, judge);
+        const voted = hasVoted(judge, c, catId);
         return send(res, 200, {
-          competitor: { number: c.number, code: c.code, category: cat.name },
+          competitor: { number: c.number, code: c.code, category: cat.name, categoryId: catId, otherCats: mineCats.length > 1 },
           voted,
           eventStatus: state.event.status,
           criteria: criteria.map(({ id, label, type }) => ({ id, label, type })),
@@ -351,11 +386,12 @@ const server = http.createServer(async (req, res) => {
         if (state.event.status !== 'open') return send(res, 409, { error: 'La votazione è chiusa.' });
         const c = state.competitors.find((x) => x.code === body.code);
         if (!c) return send(res, 404, { error: 'Concorrente non trovato' });
-        if (state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id)) {
-          return send(res, 409, { error: 'Hai già votato questo concorrente. Il voto è definitivo.' });
+        const catId = String(body.categoryId || '');
+        if (!judgeCats(judge, c).includes(catId)) return send(res, 409, { error: 'Questa gara non va votata da te.' });
+        if (hasVoted(judge, c, catId)) {
+          return send(res, 409, { error: 'Hai già votato questo concorrente in questa gara. Il voto è definitivo.' });
         }
-        const criteria = criteriaFor(c, judge);
-        if (!criteria.length) return send(res, 409, { error: 'Questo concorrente non va votato da te.' });
+        const criteria = criteriaFor(catId, judge);
         const scores = {};
         const { scaleMin: lo, scaleMax: hi } = state.event;
         const given = body.scores || {};
@@ -371,7 +407,7 @@ const server = http.createServer(async (req, res) => {
           }
           total += points(cr, scores[cr.id]);
         }
-        state.votes.push({ judgeId: judge.id, competitorId: c.id, role: judge.role, scores, total, at: new Date().toISOString() });
+        state.votes.push({ judgeId: judge.id, competitorId: c.id, categoryId: catId, role: judge.role, scores, total, at: new Date().toISOString() });
         save();
         return send(res, 200, { ok: true });
       }
@@ -393,18 +429,24 @@ const server = http.createServer(async (req, res) => {
 
       if (m === 'GET' && p === '/api/admin/state') {
         // Finché la classifica non è rivelata l'admin vede SOLO chi ha votato, mai i punteggi.
-        const progress = state.competitors.map((c) => ({
+        const competitors = state.competitors.map((c) => ({
           ...c,
-          judgesExpected: state.judges.filter((j) => mustVote(j, c)).map((j) => j.id),
-          judgesVoted: state.judges.filter((j) => state.votes.some((v) => v.judgeId === j.id && v.competitorId === c.id)).map((j) => j.id),
-          hasVotes: state.votes.some((v) => v.competitorId === c.id),
+          votedCats: [...new Set(state.votes.filter((v) => v.competitorId === c.id).map((v) => v.categoryId))],
         }));
-        const expectedVotes = progress.reduce((a, c) => a + c.judgesExpected.length, 0);
+        // Una riga per iscrizione (concorrente + gara).
+        const entries = state.competitors.flatMap((c) => c.categoryIds.filter((id) => catById(id)).map((id) => ({
+          competitorId: c.id, number: c.number, name: c.name, categoryId: id, category: catById(id).name,
+          judgesExpected: state.judges.filter((j) => criteriaFor(id, j).length).map((j) => j.id),
+          judgesVoted: state.judges.filter((j) => hasVoted(j, c, id)).map((j) => j.id),
+          bonus: state.adjustments.filter((a) => a.competitorId === c.id && a.categoryId === id).reduce((a, x) => a + x.delta, 0),
+        })));
+        const expectedVotes = entries.reduce((a, e) => a + e.judgesExpected.length, 0);
         return send(res, 200, {
           event: ev,
           base: baseUrl(req),
           suggestedBase: `http://${lanAddress()}:${PORT}`,
-          competitors: progress,
+          competitors,
+          entries,
           judges: state.judges.map((j) => ({ ...j, roleLabel: ROLES[j.role], hasVotes: state.votes.some((v) => v.judgeId === j.id) })),
           roles: ROLES,
           adjustments: state.adjustments,
@@ -435,8 +477,17 @@ const server = http.createServer(async (req, res) => {
       if (m === 'POST' && p === '/api/admin/competitor') {
         // Il nome è facoltativo: l'abbinamento numero → nome può stare su un foglio Excel a parte.
         const number = String(body.number || '').trim() || nextNumber();
-        if (state.competitors.some((c) => c.number === number)) return send(res, 409, { error: `Il numero ${number} esiste già.` });
-        addCompetitor(number, String(body.name || '').trim(), String(body.categoryId || ''));
+        const ex = state.competitors.find((c) => c.number === number);
+        if (ex) {
+          // Stesso numero con un'altra gara: si aggiunge la gara al concorrente esistente.
+          const add = validCats(body.categoryId).filter((id) => !ex.categoryIds.includes(id));
+          if (!add.length) return send(res, 409, { error: `Il numero ${number} esiste già${body.categoryId ? ' in questa gara' : ''}.` });
+          ex.categoryIds.push(...add);
+          if (String(body.name || '').trim()) ex.name = String(body.name).trim();
+          save();
+          return send(res, 200, { ok: true });
+        }
+        addCompetitor(number, String(body.name || '').trim(), body.categoryId ? [body.categoryId] : []);
         save();
         return send(res, 200, { ok: true });
       }
@@ -447,20 +498,22 @@ const server = http.createServer(async (req, res) => {
         for (const line of String(body.text || '').split(/\r?\n/)) {
           const [num, ...rest] = line.split(/[\t;]/).map((x) => x.trim().replace(/^"|"$/g, ''));
           if (!num || /^(n|n°|num|numero|#)$/i.test(num)) continue;
-          let categoryId = '';
+          const catIds = [];
           const nameParts = [];
           for (const f of rest) {
-            const cat = f && state.event.categories.find((k) => k.id === slug(f));
-            if (cat && !categoryId) categoryId = cat.id; else if (f) nameParts.push(f);
+            // Anche più gare nella stessa cella, separate da virgola o "+".
+            const parts = f ? f.split(/\s*[,+\/]\s*/) : [];
+            const ids = parts.map((x) => (state.event.categories.find((k) => k.id === slug(x)) || {}).id);
+            if (parts.length && ids.every(Boolean)) catIds.push(...ids); else if (f) nameParts.push(f);
           }
           const name = nameParts.join(' ').trim();
           const ex = state.competitors.find((c) => c.number === num);
           if (ex) {
             let changed = false;
             if (name && ex.name !== name) { ex.name = name; changed = true; }
-            if (categoryId && ex.categoryId !== categoryId && !state.votes.some((v) => v.competitorId === ex.id)) { ex.categoryId = categoryId; changed = true; }
+            for (const id of validCats(catIds)) if (!ex.categoryIds.includes(id)) { ex.categoryIds.push(id); changed = true; }
             if (changed) updated++;
-          } else { addCompetitor(num, name, categoryId); added++; }
+          } else { addCompetitor(num, name, catIds); added++; }
         }
         save();
         return send(res, 200, { ok: true, added, updated });
@@ -468,9 +521,12 @@ const server = http.createServer(async (req, res) => {
       if (m === 'POST' && p === '/api/admin/competitor/update') {
         const c = state.competitors.find((x) => x.id === body.id);
         if (!c) return send(res, 404, { error: 'Concorrente non trovato' });
-        if (typeof body.categoryId === 'string' && body.categoryId !== c.categoryId) {
-          if (state.votes.some((v) => v.competitorId === c.id)) return send(res, 409, { error: 'Ha già dei voti: non si può cambiare categoria.' });
-          c.categoryId = body.categoryId;
+        if (Array.isArray(body.categoryIds)) {
+          const next = validCats(body.categoryIds);
+          const locked = c.categoryIds.filter((id) => !next.includes(id) &&
+            (state.votes.some((v) => v.competitorId === c.id && v.categoryId === id) || state.adjustments.some((a) => a.competitorId === c.id && a.categoryId === id)));
+          if (locked.length) return send(res, 409, { error: `Non puoi togliere la gara "${catById(locked[0]).name}": ha già voti o bonus.` });
+          c.categoryIds = next;
         }
         if (typeof body.name === 'string') c.name = body.name.trim();
         save();
@@ -480,9 +536,10 @@ const server = http.createServer(async (req, res) => {
         // Bonus/malus dell'organizzatore (es. +2 / -2), sommato al totale dei giudici.
         const c = state.competitors.find((x) => x.id === body.competitorId);
         if (!c) return send(res, 404, { error: 'Concorrente non trovato' });
+        if (!c.categoryIds.includes(body.categoryId)) return send(res, 400, { error: 'Gara non valida per questo concorrente' });
         const delta = Number(body.delta);
         if (!Number.isFinite(delta) || delta === 0 || Math.abs(delta) > 100) return send(res, 400, { error: 'Valore non valido' });
-        state.adjustments.push({ id: token(6), competitorId: c.id, delta, note: String(body.note || '').trim().slice(0, 200), at: new Date().toISOString() });
+        state.adjustments.push({ id: token(6), competitorId: c.id, categoryId: body.categoryId, delta, note: String(body.note || '').trim().slice(0, 200), at: new Date().toISOString() });
         save();
         return send(res, 200, { ok: true });
       }

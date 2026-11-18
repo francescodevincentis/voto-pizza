@@ -82,14 +82,14 @@ function homeScreen(me) {
     <div class="card">
       <h2>Ciao ${esc(me.name)} 👋</h2>
       <p>Per votare, <b>inquadra con la fotocamera il QR sulla pettorina</b> del concorrente.</p>
-      <p class="muted small">Sei <b>${esc(me.roleLabel.toLowerCase())}</b>. Hai votato ${done} concorrenti su ${me.competitors.length}.</p>
+      <p class="muted small">Sei <b>${esc(me.roleLabel.toLowerCase())}</b>. Hai dato ${done} voti su ${me.competitors.length} (chi è iscritto a più gare compare una volta per gara).</p>
       <div class="bar"><i style="width:${me.competitors.length ? (done / me.competitors.length) * 100 : 0}%"></i></div>
       ${me.event.status !== 'open' ? '<div class="msg err">La votazione è chiusa.</div>' : ''}
     </div>
     <div class="card list">
       <h2>Concorrenti</h2>
       <p class="muted small">In alternativa al QR puoi toccare il concorrente dall'elenco.</p>
-      ${me.competitors.map((c) => `<a href="/v/${c.code}">
+      ${me.competitors.map((c) => `<a href="/v/${c.code}?cat=${encodeURIComponent(c.categoryId)}">
         <span><b>Concorrente #${esc(c.number)}</b> <span class="muted small">${esc(c.category)}</span></span>
         <span>${c.voted ? '<span class="pill open">Votato ✓</span>' : '<span class="muted">›</span>'}</span>
       </a>`).join('')}
@@ -97,14 +97,25 @@ function homeScreen(me) {
 }
 
 async function voteScreen(code) {
-  const d = await api('/api/judge/competitor/' + encodeURIComponent(code));
+  const cat = new URLSearchParams(location.search).get('cat');
+  const d = await api('/api/judge/competitor/' + encodeURIComponent(code) + (cat ? '?cat=' + encodeURIComponent(cat) : ''));
   if (d.status !== 200) {
     app.innerHTML = `<div class="msg err">${esc(d.error || 'Errore')}</div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
     return;
   }
+  if (d.choose) {
+    // Concorrente iscritto a più gare: il giudice sceglie quale sta assaggiando.
+    app.innerHTML = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div></div>
+      <div class="card list"><h2>Quale gara stai votando?</h2>
+      <p class="muted small">Questo concorrente è iscritto a più gare.</p>
+      ${d.choose.map((k) => `<a href="/v/${d.competitor.code}?cat=${encodeURIComponent(k.id)}"><span><b>${esc(k.name)}</b></span>
+        <span>${k.voted ? '<span class="pill open">Votato ✓</span>' : '<span class="muted">›</span>'}</span></a>`).join('')}
+      </div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
+    return;
+  }
   const head = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div><div style="margin-top:6px;font-weight:600">${esc(d.competitor.category)}</div></div>`;
   if (d.voted) {
-    app.innerHTML = head + `<div class="card" style="text-align:center"><div class="done-ico">🔒</div><h2>Hai già votato questo concorrente</h2><p class="muted">Il tuo voto è registrato e segreto.</p></div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
+    app.innerHTML = head + `<div class="card" style="text-align:center"><div class="done-ico">🔒</div><h2>Hai già votato questo concorrente in questa gara</h2><p class="muted">Il tuo voto è registrato e segreto.</p></div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
     return;
   }
   render(d, head);
@@ -185,7 +196,7 @@ function render(d, head) {
     dlg.close();
     const r = await api('/api/judge/vote', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: d.competitor.code, scores }),
+      body: JSON.stringify({ code: d.competitor.code, categoryId: d.competitor.categoryId, scores }),
     });
     if (r.status !== 200) {
       document.getElementById('err').innerHTML = `<div class="msg err">${esc(r.error || 'Errore')}</div>`;
