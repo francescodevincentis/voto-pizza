@@ -30,7 +30,6 @@ Le categorie e i criteri stanno in Regia → **Regolamento**, un testo semplice 
     forno: Etica professionale e pulizia
 
     # Napoletana
-    gusto: Gusto | Cottura | Presentazione
     forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | ...
 
 - `gusto:` / `forno:` = criteri con voto da 1 a 100, per i giudici di gusto o di forno.
