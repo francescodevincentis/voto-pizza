@@ -90,7 +90,7 @@ function defaultState() {
       checkPoints: 5,
       teamSize: 4, // massimo concorrenti per team
       teams: defaultTeams(),
-      teamExcluded: ['chef', 'genio-e-follia', 'napoletana'], // gare che non contano per la squadra
+      teamExcluded: ['chef', 'genio-e-follia', 'napoletana', 'amatoriale'], // gare che non contano per la squadra
       rules: DEFAULT_RULES,
       categories: parseRules(DEFAULT_RULES).categories,
     },
@@ -123,7 +123,8 @@ if (typeof state.event.rules === 'string' && state.event.rules.includes('forno Â
   save();
 }
 if (!Array.isArray(state.event.teams)) { state.event.teams = defaultTeams(); state.event.teamSize = 4; }
-if (!Array.isArray(state.event.teamExcluded)) state.event.teamExcluded = ['chef', 'genio-e-follia', 'napoletana'];
+if (!Array.isArray(state.event.teamExcluded)) state.event.teamExcluded = ['chef', 'genio-e-follia', 'napoletana', 'amatoriale'];
+else if (state.event.teamExcluded.join() === 'chef,genio-e-follia,napoletana') state.event.teamExcluded.push('amatoriale');
 for (const j of state.judges) if (!ROLES[j.role]) j.role = 'gusto';
 // Versione con una sola categoria per concorrente -> elenco di gare.
 for (const c of state.competitors) {
@@ -265,7 +266,7 @@ function ranking() {
 }
 
 // Classifica a squadre: punteggio del team = somma dei totali dei suoi concorrenti nelle gare che contano
-// per la squadra (Chef, Genio e follia e Napoletana sono escluse di default).
+// per la squadra (Chef, Genio e follia, Napoletana e Amatoriale sono escluse di default).
 function teamRanking() {
   const totals = {};
   for (const g of ranking()) {
