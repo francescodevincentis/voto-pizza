@@ -89,8 +89,7 @@
       <div style="overflow-x:auto"><table class="matrix" id="matrix"></table></div>
     </div>
 
-    <div class="grid">
-      <div class="card">
+    <div class="card">
         <h2>Concorrenti</h2>
         <form id="addComp" class="row" style="margin-bottom:10px">
           <input name="number" placeholder="N°" style="width:70px">
@@ -99,15 +98,16 @@
           <input name="name" class="grow" placeholder="Nome (facoltativo, i giudici non lo vedono)">
           <button>Aggiungi</button>
         </form>
-        <table id="compTable"></table>
+        <div style="overflow-x:auto"><table id="compTable"></table></div>
         <details style="margin-top:12px">
           <summary class="small">Importa da Excel</summary>
           <p class="muted small">Copia da Excel le colonne <b>Numero</b>, <b>Gara</b> e (se vuoi) <b>Team</b> e <b>Nome</b> e incollale qui. Il team va scritto come nell'elenco (es. Team Diavola o solo Diavola); se è già pieno il concorrente resta senza team. La gara va scritta come nel regolamento (es. Napoletana). Chi fa più gare: più colonne, più gare nella stessa cella separate da virgola, oppure una riga per gara con lo stesso numero. I numeri già presenti vengono aggiornati, non duplicati.</p>
           <textarea id="importText" rows="5" style="width:100%" placeholder="01&#9;Classica&#9;Pizzeria Da Mario&#10;02&#9;Napoletana&#9;Pizzeria Bella Napoli"></textarea>
           <button id="importBtn" type="button">Importa</button>
         </details>
-      </div>
+    </div>
 
+    <div class="grid">
       <div class="card">
         <h2>Giudici</h2>
         <form id="addJudge" class="row" style="margin-bottom:10px">
@@ -257,7 +257,7 @@ function render() {
   const catOptions = (sel, skip = [], first = '— gara —') => `<option value="">${first}</option>` + ev.categories.filter((k) => !skip.includes(k.id)).map((k) => `<option value="${esc(k.id)}" ${k.id === sel ? 'selected' : ''}>${esc(k.name)}</option>`).join('');
   if (document.activeElement !== $('addCompCat')) { const v = $('addCompCat').value; $('addCompCat').innerHTML = catOptions(v); }
   // Gare del concorrente: una pillola per gara (✕ per toglierla) + menu per aggiungerne un'altra.
-  $('compTable').innerHTML = S.competitors.map((c) => `<tr><td>#${esc(c.number)}</td>
+  $('compTable').innerHTML = (S.competitors.length ? '<tr><th>N°</th><th>Gare</th><th>Team</th><th>Nome</th><th>QR</th><th></th></tr>' : '') + S.competitors.map((c) => `<tr><td>#${esc(c.number)}</td>
     <td>${c.categoryIds.map((id) => `<span class="gara">${esc(catName(id))}${c.votedCats.includes(id) ? '' : ` <button class="x" data-rm-cat="${c.id}" data-cat="${esc(id)}" title="Togli questa gara">✕</button>`}</span>`).join('')}
       ${c.categoryIds.length < ev.categories.length ? `<select data-add-cat="${c.id}" style="padding:4px 6px;font-size:.8rem">${catOptions('', c.categoryIds, '+ gara')}</select>` : ''}</td>
     <td><select data-team-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px">${teamOptions(c.teamId, c.id)}</select></td>
