@@ -16,15 +16,19 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 //   # Nome categoria
 //   gusto: Criterio | Criterio | ...      -> voto da scaleMin a scaleMax (es. 1–100)
 //   forno ±5: Voce | Voce | ...           -> spunta: rispettata +5, non rispettata −5
+//   forno -5: Voce | ...                   -> solo penalità: rispettata 0, non rispettata −5
 const STANDARD = 'gusto: Gusto | Cottura | Presentazione\nforno: Etica professionale e pulizia';
 const DEFAULT_RULES = [
   ...['Classica', 'Gourmet', 'Contemporanea', 'Chef', 'Senza Glutine', 'In pala', 'Amatoriale', 'Genio e follia']
     .map((n) => `# ${n}\n${STANDARD}`),
   `# Napoletana
-forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | Mozzarella 80/100 gr | Mozzarella tagliata a listelli | Sale sul pomodoro | Basilico in cottura | Oliera | Cottura 90 secondi | Stesura con schiaffo | Infornata con rotatoria senza fuoriuscita | Panetto 180/250 gr | Bordo da 1 a 2 cm (oltre: penalità) | Straccio per pulire la pizza | La pizza non deve superare 35 cm ø`,
+forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | Mozzarella 80/100 gr
+forno -5: Mozzarella tagliata a listelli
+forno ±5: Sale sul pomodoro | Basilico in cottura | Oliera | Cottura 90 secondi | Stesura con schiaffo | Infornata con rotatoria senza fuoriuscita | Panetto 180/250 gr | Bordo da 1 a 2 cm (oltre: penalità) | Straccio per pulire la pizza | La pizza non deve superare 35 cm ø
+forno -5: Monili e gioielli`,
   `# Ruota di carro
 forno: Etica professionale | Pulizia
-forno ±5: Diametro 35–40 cm ø`,
+forno -5: Diametro inferiore a 35 cm ø`,
 ].join('\n\n');
 
 const DEFAULT_TEAMS = [
@@ -47,11 +51,11 @@ function parseRules(text) {
   String(text || '').split(/\r?\n/).forEach((raw, i) => {
     const line = raw.trim();
     if (!line || line.startsWith('//')) return;
-    const m = line.match(/^(gusto|forno)\s*(±\s*\d+|\+\/?-\s*\d+|spunta|check)?\s*:\s*(.*)$/i);
+    const m = line.match(/^(gusto|forno)\s*(±\s*\d+|\+\/?-\s*\d+|[-−]\s*\d+|penalit[aà]|spunta|check)?\s*:\s*(.*)$/i);
     if (m) {
       if (!cur) { errors.push(`Riga ${i + 1}: prima dei criteri scrivi il nome della categoria (es. "# Classica").`); return; }
       const role = m[1].toLowerCase();
-      const type = m[2] ? 'check' : 'score';
+      const type = !m[2] ? 'score' : /^([-−]|penal)/i.test(m[2]) ? 'penalty' : 'check';
       const labels = m[3].split('|').map((s) => s.trim()).filter(Boolean);
       if (!labels.length) errors.push(`Riga ${i + 1}: nessun criterio dopo i due punti.`);
       for (const label of labels) cur.criteria.push({ id: 'k' + (cur.criteria.length + 1), label, role, type });
@@ -106,6 +110,17 @@ try {
 }
 
 if (!Array.isArray(state.adjustments)) state.adjustments = [];
+// Regolamento predefinito della versione precedente: "Mozzarella tagliata a listelli", "Monili e gioielli"
+// e il diametro della Ruota di carro diventano sole penalità (−5). Le voci restano nello stesso ordine,
+// così i voti già dati non cambiano significato.
+if (typeof state.event.rules === 'string' && state.event.rules.includes('forno ±5: Diametro 35–40 cm ø')) {
+  state.event.rules = state.event.rules
+    .replace('Mozzarella 80/100 gr | Mozzarella tagliata a listelli | ', 'Mozzarella 80/100 gr\nforno -5: Mozzarella tagliata a listelli\nforno ±5: ')
+    .replace('La pizza non deve superare 35 cm ø', 'La pizza non deve superare 35 cm ø\nforno -5: Monili e gioielli')
+    .replace('forno ±5: Diametro 35–40 cm ø', 'forno -5: Diametro inferiore a 35 cm ø');
+  state.event.categories = parseRules(state.event.rules).categories;
+  save();
+}
 if (!Array.isArray(state.event.teams)) { state.event.teams = defaultTeams(); state.event.teamSize = 4; }
 for (const j of state.judges) if (!ROLES[j.role]) j.role = 'gusto';
 // Versione con una sola categoria per concorrente -> elenco di gare.
@@ -195,6 +210,7 @@ function hasVoted(judge, c, catId) {
   return state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id && v.categoryId === catId);
 }
 function points(cr, v) {
+  if (cr.type === 'penalty') return v ? 0 : -state.event.checkPoints;
   return cr.type === 'check' ? (v ? state.event.checkPoints : -state.event.checkPoints) : Number(v) || 0;
 }
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -452,7 +468,7 @@ const server = http.createServer(async (req, res) => {
         const given = body.scores || {};
         let total = 0;
         for (const cr of criteria) {
-          if (cr.type === 'check') {
+          if (cr.type === 'check' || cr.type === 'penalty') {
             if (typeof given[cr.id] !== 'boolean') return send(res, 400, { error: `Indica se "${cr.label}" è rispettato o no` });
             scores[cr.id] = given[cr.id];
           } else {

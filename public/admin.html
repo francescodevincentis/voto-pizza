@@ -123,7 +123,7 @@
     <div class="grid">
       <div class="card">
         <h2>Regolamento: categorie e criteri</h2>
-        <p class="muted small">Una categoria per blocco. <code># Nome</code> apre la categoria; <code>gusto:</code> e <code>forno:</code> elencano i criteri con voto, separati da <code>|</code>; <code>forno ±5:</code> elenca le voci della lista di controllo (rispettata +punti, non rispettata −punti). Modificabile solo prima che arrivino voti.</p>
+        <p class="muted small">Una categoria per blocco. <code># Nome</code> apre la categoria; <code>gusto:</code> e <code>forno:</code> elencano i criteri con voto, separati da <code>|</code>; <code>forno ±5:</code> elenca le voci della lista di controllo (rispettata +punti, non rispettata −punti); <code>forno -5:</code> sole penalità (il giudice segna "Tutto ok" = 0 oppure "Penalità" = −punti). Modificabile solo prima che arrivino voti.</p>
         <textarea id="rules" rows="16" spellcheck="false"></textarea>
         <div class="row" style="margin:10px 0">
           <label class="small">Voto da <input id="smin" type="number" style="width:70px"></label>
@@ -267,7 +267,7 @@ function render() {
   if (rulesDraft === null) { rulesDraft = ev.rules; $('rules').value = ev.rules; }
   $('rulesPreview').innerHTML = ev.categories.map((k) => `<div class="cat-prev"><b>${esc(k.name)}</b>${['gusto', 'forno'].map((role) => {
     const cs = k.criteria.filter((x) => x.role === role);
-    return cs.length ? `<div class="small"><span class="tag-role ${role}">${role}</span>${cs.map((x) => esc(x.label) + (x.type === 'check' ? ` <span class="muted">(±${ev.checkPoints})</span>` : '')).join(' · ')}</div>` : '';
+    return cs.length ? `<div class="small"><span class="tag-role ${role}">${role}</span>${cs.map((x) => esc(x.label) + (x.type === 'check' ? ` <span class="muted">(±${ev.checkPoints})</span>` : x.type === 'penalty' ? ` <span class="muted">(penalità −${ev.checkPoints})</span>` : '')).join(' · ')}</div>` : '';
   }).join('')}</div>`).join('');
   if (!['smin', 'smax', 'cpts'].includes(document.activeElement.id)) { $('smin').value = ev.scaleMin; $('smax').value = ev.scaleMax; $('cpts').value = ev.checkPoints; }
   if (document.activeElement !== $('setName')) $('setName').value = ev.name;

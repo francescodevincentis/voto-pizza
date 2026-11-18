@@ -128,7 +128,8 @@ function render(d, head) {
   }
   const scores = {};
   const scoreCrit = d.criteria.filter((c) => c.type !== 'check');
-  const checkCrit = d.criteria.filter((c) => c.type === 'check');
+  const checkCrit = d.criteria.filter((c) => c.type === 'check' || c.type === 'penalty');
+  const pts = (c, yes) => c.type === 'penalty' ? (yes ? '0' : `−${P}`) : (yes ? `+${P}` : `−${P}`);
   const mid = Math.round((d.scaleMin + d.scaleMax) / 2);
   const P = d.checkPoints;
   app.innerHTML = head + `
@@ -143,10 +144,10 @@ function render(d, head) {
       </div>`).join('')}
     </div>` : ''}
     ${checkCrit.length ? `<div class="card">
-      <div class="sect">Lista di controllo · rispettato +${P}, non rispettato −${P}</div>
+      <div class="sect">Lista di controllo · rispettato / non rispettato</div>
       ${checkCrit.map((c) => `<div class="crit" data-id="${c.id}" data-type="check">
         <div class="lbl"><span>${esc(c.label)}</span><span class="val">–</span></div>
-        <div class="check"><button type="button" class="yes" data-v="1">✓ Sì (+${P})</button><button type="button" class="no" data-v="0">✗ No (−${P})</button></div>
+        <div class="check">${c.type === 'penalty' ? `<button type="button" class="yes" data-v="1">✓ Tutto ok (0)</button><button type="button" class="no" data-v="0">⚠ Penalità (−${P})</button>` : `<button type="button" class="yes" data-v="1">✓ Sì (+${P})</button><button type="button" class="no" data-v="0">✗ No (−${P})</button>`}</div>
       </div>`).join('')}
     </div>` : ''}
     <p class="muted small">🔒 Il voto è segreto: nessuno, nemmeno gli organizzatori, vede i punteggi prima della chiusura.</p>
@@ -180,12 +181,13 @@ function render(d, head) {
       if (!b) return;
       el.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x === b));
       scores[el.dataset.id] = b.dataset.v === '1';
-      el.querySelector('.val').textContent = b.dataset.v === '1' ? `+${P}` : `−${P}`;
+      const cr = d.criteria.find((x) => x.id === el.dataset.id);
+      el.querySelector('.val').textContent = pts(cr, b.dataset.v === '1');
       refresh();
     });
   });
 
-  const show = (c) => c.type === 'check' ? (scores[c.id] ? `✓ +${P}` : `✗ −${P}`) : scores[c.id];
+  const show = (c) => c.type === 'score' ? scores[c.id] : c.type === 'penalty' ? (scores[c.id] ? 'ok (0)' : `penalità −${P}`) : (scores[c.id] ? '✓ ' : '✗ ') + pts(c, scores[c.id]);
   const dlg = document.getElementById('confirm');
   sendBtn.onclick = () => {
     document.getElementById('recap').innerHTML = d.criteria.map((c) => `${esc(c.label)}: <b>${show(c)}</b>`).join('<br>');
