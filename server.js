@@ -130,6 +130,7 @@ for (const j of state.judges) if (!ROLES[j.role]) j.role = 'gusto';
 for (const c of state.competitors) {
   if (!Array.isArray(c.categoryIds)) c.categoryIds = c.categoryId ? [c.categoryId] : [];
   if (typeof c.teamId !== 'string') c.teamId = '';
+  if (typeof c.teamCategoryId !== 'string') c.teamCategoryId = '';
   delete c.categoryId;
 }
 for (const v of state.votes || []) if (!('categoryId' in v)) v.categoryId = (state.competitors.find((c) => c.id === v.competitorId) || { categoryIds: [''] }).categoryIds[0] || '';
@@ -267,19 +268,25 @@ function ranking() {
 
 // Classifica a squadre: punteggio del team = somma dei totali dei suoi concorrenti nelle gare che contano
 // per la squadra (Chef, Genio e follia, Napoletana e Amatoriale sono escluse di default).
+function teamCats() {
+  return state.event.categories.filter((k) => !state.event.teamExcluded.includes(k.id)).map((k) => k.id);
+}
+// Gara che il concorrente porta alla squadra: una sola, tra quelle valide per la squadra.
+// Se non è stata scelta e ne fa una sola valida, si usa quella.
+function teamCatOf(c) {
+  const valid = teamCats().filter((id) => c.categoryIds.includes(id));
+  if (c.teamCategoryId && valid.includes(c.teamCategoryId)) return c.teamCategoryId;
+  return valid.length === 1 ? valid[0] : '';
+}
 function teamRanking() {
-  const totals = {};
-  for (const g of ranking()) {
-    if (!g.id || state.event.teamExcluded.includes(g.id)) continue;
-    for (const r of g.rows) totals[r.number] = (totals[r.number] || 0) + r.total;
-  }
+  const totals = {}; // numero|gara -> totale
+  for (const g of ranking()) for (const r of g.rows) totals[r.number + '|' + g.id] = r.total;
   const rows = state.event.teams.map((t) => {
-    const members = state.competitors.filter((c) => c.teamId === t.id);
-    return {
-      name: t.name,
-      members: members.map((c) => ({ number: c.number, name: c.name, total: r2(totals[c.number] || 0) })),
-      total: r2(members.reduce((a, c) => a + (totals[c.number] || 0), 0)),
-    };
+    const members = state.competitors.filter((c) => c.teamId === t.id).map((c) => {
+      const cat = teamCatOf(c);
+      return { number: c.number, name: c.name, category: cat ? catById(cat).name : '', total: r2(cat ? totals[c.number + '|' + cat] || 0 : 0) };
+    });
+    return { name: t.name, members, total: r2(members.reduce((a, m) => a + m.total, 0)) };
   }).filter((t) => t.members.length);
   rows.sort((a, b) => b.total - a.total);
   let pos = 0, prev = null;
@@ -509,6 +516,7 @@ const server = http.createServer(async (req, res) => {
         // Finché la classifica non è rivelata l'admin vede SOLO chi ha votato, mai i punteggi.
         const competitors = state.competitors.map((c) => ({
           ...c,
+          teamCat: teamCatOf(c),
           votedCats: [...new Set(state.votes.filter((v) => v.competitorId === c.id).map((v) => v.categoryId))],
         }));
         // Una riga per iscrizione (concorrente + gara).
@@ -639,6 +647,12 @@ const server = http.createServer(async (req, res) => {
           if (locked.length) return send(res, 409, { error: `Non puoi togliere la gara "${catById(locked[0]).name}": ha già voti o bonus.` });
           c.categoryIds = next;
         }
+        if (typeof body.teamCategoryId === 'string') {
+          const id = body.teamCategoryId;
+          if (id && !teamCats().includes(id)) return send(res, 400, { error: 'Questa gara non conta per la squadra.' });
+          if (id && !c.categoryIds.includes(id)) c.categoryIds.push(id); // la gara per la squadra è anche una sua gara
+          c.teamCategoryId = id;
+        }
         if (typeof body.teamId === 'string' && body.teamId !== c.teamId) {
           const err = teamError(body.teamId, c.id);
           if (err) return send(res, 409, { error: err });
@@ -714,8 +728,8 @@ const server = http.createServer(async (req, res) => {
         }
         const tr = teamRanking();
         if (tr.length) {
-          lines.push([], ['CLASSIFICA A SQUADRE'], ['Posizione', 'Team', 'Totale', 'Concorrenti']);
-          for (const t of tr) lines.push([t.position, t.name, t.total, t.members.map((x) => `#${x.number}${x.name ? ' ' + x.name : ''} (${x.total})`).join(', ')]);
+          lines.push([], ['CLASSIFICA A SQUADRE'], ['Posizione', 'Team', 'Totale', 'Concorrenti (gara per la squadra, punti)']);
+          for (const t of tr) lines.push([t.position, t.name, t.total, t.members.map((x) => `#${x.number}${x.name ? ' ' + x.name : ''} (${x.category || 'gara non scelta'}, ${x.total})`).join(', ')]);
         }
         const csv = lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
         return send(res, 200, '﻿' + csv, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="classifica.csv"' });

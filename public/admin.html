@@ -223,8 +223,8 @@ function render() {
       <p class="muted small">Totale = somma dei punti di tutti i giudici (gusto + forno, lista di controllo compresa) + bonus/malus, che è conteggiato ma non mostrato. Colonne dei criteri = media dei voti dei giudici.</p>
       ${S.teamRanking && S.teamRanking.length ? `<h3 class="cat">👥 Classifica a squadre</h3>
       <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>Team</th><th>Totale</th><th>Concorrenti (punti portati alla squadra)</th></tr>
-      ${S.teamRanking.map((t) => `<tr><td><b>${t.position}°</b></td><td>${esc(t.name)}</td><td><b>${t.total}</b></td><td class="small">${t.members.map((m) => `#${esc(m.number)} ${esc(m.name)} (${m.total})`).join(' · ')}</td></tr>`).join('')}
-      </table></div><p class="muted small">Punteggio del team = somma dei totali dei suoi concorrenti nelle gare che contano per la squadra (escluse: ${esc(ev.teamExcluded.map(catName).filter(Boolean).join(', ') || 'nessuna')}).</p>` : ''}`;
+      ${S.teamRanking.map((t) => `<tr><td><b>${t.position}°</b></td><td>${esc(t.name)}</td><td><b>${t.total}</b></td><td class="small">${t.members.map((m) => `#${esc(m.number)} ${esc(m.name)} <span class="muted">${esc(m.category || 'gara non scelta')}</span> (${m.total})`).join(' · ')}</td></tr>`).join('')}
+      </table></div><p class="muted small">Punteggio del team = somma dei punti che ogni concorrente prende nella sua gara per la squadra (una sola a testa) (escluse: ${esc(ev.teamExcluded.map(catName).filter(Boolean).join(', ') || 'nessuna')}).</p>` : ''}`;
   }
 
   // Bonus / malus
@@ -263,7 +263,9 @@ function render() {
   $('compTable').innerHTML = (S.competitors.length ? '<tr><th>N°</th><th>Gare</th><th>Team</th><th>Nome</th><th>QR</th><th></th></tr>' : '') + S.competitors.map((c) => `<tr><td>#${esc(c.number)}</td>
     <td>${c.categoryIds.map((id) => `<span class="gara">${esc(catName(id))}${c.votedCats.includes(id) ? '' : ` <button class="x" data-rm-cat="${c.id}" data-cat="${esc(id)}" title="Togli questa gara">✕</button>`}</span>`).join('')}
       ${c.categoryIds.length < ev.categories.length ? `<select data-add-cat="${c.id}" style="padding:4px 6px;font-size:.8rem">${catOptions('', c.categoryIds, '+ gara')}</select>` : ''}</td>
-    <td><select data-team-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px">${teamOptions(c.teamId, c.id)}</select></td>
+    <td><select data-team-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px">${teamOptions(c.teamId, c.id)}</select>
+      ${c.teamId ? `<div style="margin-top:4px"><select data-teamcat-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px;${c.teamCat ? '' : 'border-color:var(--accent);color:var(--accent)'}">
+        <option value="">${c.teamCat ? '' : '⚠ '}gara per la squadra…</option>${ev.categories.filter((k) => !ev.teamExcluded.includes(k.id)).map((k) => `<option value="${esc(k.id)}" ${k.id === c.teamCat ? 'selected' : ''}>Squadra: ${esc(k.name)}</option>`).join('')}</select></div>` : ''}</td>
     <td>${esc(c.name)}</td><td><a href="${S.base}/v/${c.code}" target="_blank" class="small">link</a></td><td style="text-align:right"><button class="ghost small" data-del-comp="${c.id}">✕</button></td></tr>`).join('');
   $('judgeTable').innerHTML = S.judges.map((j) => `<tr><td>${esc(j.name)}</td><td><span class="tag-role ${j.role}">${esc(j.roleLabel.replace('Giudice ', ''))}</span></td><td><a href="${S.base}/j/${j.token}" target="_blank" class="small">link badge</a></td><td style="text-align:right"><button class="ghost small" data-del-judge="${j.id}">✕</button></td></tr>`).join('');
 
@@ -299,6 +301,8 @@ $('importBtn').onclick = async () => {
 };
 $('addJudge').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/judge', { name: f.name.value, role: f.role.value }); f.name.value = ''; };
 document.addEventListener('change', (e) => {
+  const tcat = e.target.dataset.teamcatComp;
+  if (tcat) act('/api/admin/competitor/update', { id: tcat, teamCategoryId: e.target.value }, 'Gara per la squadra aggiornata');
   const tc = e.target.dataset.teamComp;
   if (tc) act('/api/admin/competitor/update', { id: tc, teamId: e.target.value }, 'Team aggiornato');
   const id = e.target.dataset.addCat;
