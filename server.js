@@ -223,14 +223,20 @@ function cookies(req) {
 }
 
 const adminSessions = new Set();
-// Sul computer che fa girare l'app (http://localhost:3000) la regia si apre senza password.
-// Da altri dispositivi e sul sito online la password resta, altrimenti chiunque potrebbe rivelare o azzerare.
+// Sul computer che fa girare l'app la regia si apre senza password (sia da localhost sia dal suo
+// indirizzo Wi-Fi, che è quello aperto da avvia.command). Da altri dispositivi e sul sito online
+// la password resta, altrimenti chiunque potrebbe rivelare o azzerare.
+function ownAddresses() {
+  const out = new Set(['localhost']);
+  for (const list of Object.values(os.networkInterfaces())) for (const a of list || []) out.add(a.address);
+  return out;
+}
 function isLocalRequest(req) {
-  const ip = req.socket.remoteAddress || '';
-  const loopback = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  const own = ownAddresses();
+  const ip = String(req.socket.remoteAddress || '').replace(/^::ffff:/, '');
   const proxied = req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers['x-forwarded-host'] || req.headers.forwarded;
   const host = String(req.headers.host || '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
-  return loopback && !proxied && ['localhost', '127.0.0.1', '::1'].includes(host);
+  return !!ip && own.has(ip) && !proxied && own.has(host);
 }
 function isAdmin(req) {
   return isLocalRequest(req) || adminSessions.has(cookies(req).admin);
