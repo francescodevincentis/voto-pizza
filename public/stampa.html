@@ -62,6 +62,7 @@ function qr(text) {
     <div class="sheet">${S.competitors.map((c) => `<div class="tag">
       <div class="ev">${ev}</div>
       <div class="num">${esc(c.number)}</div>
+      <div class="name">${esc((S.event.categories.find((k) => k.id === c.categoryId) || {}).name || '')}</div>
       <div class="qr">${qr(`${S.base}/v/${c.code}`)}</div>
       <div class="hint">Giudici: inquadrate per votare</div>
     </div>`).join('')}</div>
@@ -69,6 +70,7 @@ function qr(text) {
     <div class="sheet">${S.judges.map((j) => `<div class="tag judge">
       <div class="ev">${ev}</div>
       <div class="num">${esc(j.name)}</div>
+      <div class="name">${esc(j.roleLabel)}</div>
       <div class="qr">${qr(`${S.base}/j/${j.token}`)}</div>
       <div class="hint">Inquadra una sola volta per abilitare il tuo telefono al voto</div>
       <div class="warn">PERSONALE · NON CONDIVIDERE</div>

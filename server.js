@@ -11,6 +11,59 @@ const PORT = Number(process.env.PORT) || 3000;
 const DATA_FILE = path.join(__dirname, 'data.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
+// ---------- Regolamento ----------
+// Il regolamento è un testo semplice, modificabile dalla Regia:
+//   # Nome categoria
+//   gusto: Criterio | Criterio | ...      -> voto da scaleMin a scaleMax (es. 1–100)
+//   forno ±5: Voce | Voce | ...           -> spunta: rispettata +5, non rispettata −5
+const STANDARD = 'gusto: Gusto | Cottura | Presentazione\nforno: Etica professionale e pulizia';
+const DEFAULT_RULES = [
+  ...['Classica', 'Gourmet', 'Contemporanea', 'Chef', 'Senza Glutine', 'In pala', 'Amatoriale', 'Genio e follia']
+    .map((n) => `# ${n}\n${STANDARD}`),
+  `# Napoletana
+gusto: Gusto | Cottura | Presentazione
+forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | Mozzarella 80/100 gr | Mozzarella tagliata a listelli | Sale sul pomodoro | Basilico in cottura | Oliera | Cottura 90 secondi | Stesura con schiaffo | Infornata con rotatoria senza fuoriuscita | Panetto 180/250 gr | Bordo 1–2 cm (max 0,4) | Straccio per pulire la pizza | La pizza non deve superare 35 cm ø`,
+  `# Ruota di carro
+gusto: Gusto | Cottura | Presentazione
+forno: Etica professionale | Pulizia
+forno ±5: Diametro 35–40 cm ø`,
+].join('\n\n');
+
+const ROLES = { gusto: 'Giudice di gusto', forno: 'Giudice di forno' };
+
+function slug(s) {
+  return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cat';
+}
+
+function parseRules(text) {
+  const categories = [];
+  const errors = [];
+  let cur = null;
+  String(text || '').split(/\r?\n/).forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || line.startsWith('//')) return;
+    const m = line.match(/^(gusto|forno)\s*(±\s*\d+|\+\/?-\s*\d+|spunta|check)?\s*:\s*(.*)$/i);
+    if (m) {
+      if (!cur) { errors.push(`Riga ${i + 1}: prima dei criteri scrivi il nome della categoria (es. "# Classica").`); return; }
+      const role = m[1].toLowerCase();
+      const type = m[2] ? 'check' : 'score';
+      const labels = m[3].split('|').map((s) => s.trim()).filter(Boolean);
+      if (!labels.length) errors.push(`Riga ${i + 1}: nessun criterio dopo i due punti.`);
+      for (const label of labels) cur.criteria.push({ id: 'k' + (cur.criteria.length + 1), label, role, type });
+      return;
+    }
+    const name = line.replace(/^#+\s*/, '').trim();
+    if (!name) return;
+    const id = slug(name);
+    if (categories.some((c) => c.id === id)) { errors.push(`Riga ${i + 1}: la categoria "${name}" è ripetuta.`); cur = null; return; }
+    cur = { id, name, criteria: [] };
+    categories.push(cur);
+  });
+  for (const c of categories) if (!c.criteria.length) errors.push(`La categoria "${c.name}" non ha criteri.`);
+  if (!categories.length) errors.push('Nessuna categoria trovata.');
+  return { categories, errors };
+}
+
 // ---------- Stato persistente ----------
 function token(n = 8) {
   return crypto.randomBytes(n).toString('base64url');
@@ -20,22 +73,18 @@ function defaultState() {
   return {
     adminPassword: process.env.ADMIN_PASSWORD || 'pizza2026',
     event: {
-      name: 'Campionato di Pizza Contemporanea',
+      name: 'Pizza 2026',
       status: 'open', // open | closed | revealed
       baseUrl: '',
       scaleMin: 1,
-      scaleMax: 10,
-      criteria: [
-        { id: 'impasto', label: 'Impasto e cornicione', weight: 1 },
-        { id: 'cottura', label: 'Cottura', weight: 1 },
-        { id: 'gusto', label: 'Gusto ed equilibrio', weight: 1.5 },
-        { id: 'aspetto', label: 'Aspetto e presentazione', weight: 1 },
-        { id: 'creativita', label: 'Creatività', weight: 1 },
-      ],
+      scaleMax: 100,
+      checkPoints: 5,
+      rules: DEFAULT_RULES,
+      categories: parseRules(DEFAULT_RULES).categories,
     },
-    competitors: [], // { id, number, name, code }
-    judges: [], // { id, name, token }
-    votes: [], // { judgeId, competitorId, scores: {criterio: n}, total, at }
+    competitors: [], // { id, number, name, categoryId, code }
+    judges: [], // { id, name, role: 'gusto'|'forno', token }
+    votes: [], // { judgeId, competitorId, role, scores: {criterio: numero | true/false}, total, at }
     adjustments: [], // { id, competitorId, delta, note, at }  bonus/malus dell'organizzatore
   };
 }
@@ -50,6 +99,16 @@ try {
 }
 
 if (!Array.isArray(state.adjustments)) state.adjustments = [];
+for (const j of state.judges) if (!ROLES[j.role]) j.role = 'gusto';
+for (const c of state.competitors) if (typeof c.categoryId !== 'string') c.categoryId = '';
+// Dati della versione precedente (5 criteri, scala 1–10): passa al regolamento 2026.
+if (!Array.isArray(state.event.categories)) {
+  const d = defaultState().event;
+  Object.assign(state.event, { scaleMin: d.scaleMin, scaleMax: d.scaleMax, checkPoints: d.checkPoints, rules: d.rules, categories: d.categories });
+  delete state.event.criteria;
+  if (state.votes.length) { state.legacyVotes = state.votes; state.votes = []; }
+  save();
+}
 
 function save() {
   fs.writeFileSync(DATA_FILE + '.tmp', JSON.stringify(state, null, 2));
@@ -57,16 +116,14 @@ function save() {
 }
 
 function seedDemo() {
-  const names = [
-    'Marco Esposito', 'Giulia Russo', 'Antonio Ferrara', 'Sara Romano',
-    'Luca De Luca', 'Chiara Greco', 'Davide Conti', 'Elena Marino',
-  ];
-  names.forEach((name, i) => addCompetitor(String(i + 1).padStart(2, '0'), name));
-  ['Giudice 1', 'Giudice 2', 'Giudice 3', 'Giudice 4', 'Giudice 5'].forEach(addJudge);
+  const cats = state.event.categories;
+  for (let i = 0; i < 12; i++) addCompetitor(String(i + 1).padStart(2, '0'), '', cats[i % cats.length].id);
+  ['Gusto 1', 'Gusto 2', 'Gusto 3'].forEach((n) => addJudge(n, 'gusto'));
+  ['Forno 1', 'Forno 2'].forEach((n) => addJudge(n, 'forno'));
 }
 
-function addCompetitor(number, name) {
-  const c = { id: token(6), number: String(number), name: String(name || ''), code: token(6) };
+function addCompetitor(number, name, categoryId) {
+  const c = { id: token(6), number: String(number), name: String(name || ''), categoryId: String(categoryId || ''), code: token(6) };
   state.competitors.push(c);
   return c;
 }
@@ -76,53 +133,67 @@ function nextNumber() {
   return String(max + 1).padStart(2, '0');
 }
 
-function addJudge(name) {
-  const j = { id: token(6), name: String(name), token: token(12) };
+function addJudge(name, role) {
+  const j = { id: token(6), name: String(name), role: ROLES[role] ? role : 'gusto', token: token(12) };
   state.judges.push(j);
   return j;
 }
 
-// Punteggio di un singolo voto: media pesata dei criteri.
-function weightedScore(scores) {
-  let sum = 0, w = 0;
-  for (const c of state.event.criteria) {
-    sum += (Number(scores[c.id]) || 0) * c.weight;
-    w += c.weight;
-  }
-  return w ? Math.round((sum / w) * 100) / 100 : 0;
+function categoryOf(c) {
+  return state.event.categories.find((k) => k.id === c.categoryId) || null;
 }
+// Criteri che un giudice deve valutare per un concorrente (dipendono da categoria e tipo di giudice).
+function criteriaFor(c, judge) {
+  const cat = categoryOf(c);
+  return cat ? cat.criteria.filter((k) => k.role === judge.role) : [];
+}
+function mustVote(judge, c) {
+  return criteriaFor(c, judge).length > 0;
+}
+function points(cr, v) {
+  return cr.type === 'check' ? (v ? state.event.checkPoints : -state.event.checkPoints) : Number(v) || 0;
+}
+const r2 = (n) => Math.round(n * 100) / 100;
 
+// Classifica separata per categoria. Totale = somma dei punti di tutti i giudici + bonus/malus.
 function ranking() {
-  const rows = state.competitors.map((c) => {
+  const groups = state.event.categories.map((cat) => ({ id: cat.id, name: cat.name, criteria: cat.criteria, rows: [] }));
+  const orphan = { id: '', name: 'Senza categoria', criteria: [], rows: [] };
+  for (const c of state.competitors) {
+    const g = groups.find((x) => x.id === c.categoryId) || orphan;
     const vs = state.votes.filter((v) => v.competitorId === c.id);
     const votesTotal = vs.reduce((a, v) => a + v.total, 0);
+    const byRole = { gusto: 0, forno: 0 };
+    for (const v of vs) byRole[v.role] = (byRole[v.role] || 0) + v.total;
     const bonus = state.adjustments.filter((a) => a.competitorId === c.id).reduce((a, x) => a + x.delta, 0);
-    const total = votesTotal + bonus;
     const perCriterion = {};
-    for (const cr of state.event.criteria) {
-      perCriterion[cr.id] = vs.length
-        ? Math.round((vs.reduce((a, v) => a + (Number(v.scores[cr.id]) || 0), 0) / vs.length) * 100) / 100
-        : 0;
+    for (const cr of g.criteria) {
+      const given = vs.filter((v) => cr.id in v.scores);
+      perCriterion[cr.id] = given.length ? r2(given.reduce((a, v) => a + points(cr, v.scores[cr.id]), 0) / given.length) : null;
     }
-    return {
+    g.rows.push({
       number: c.number,
       name: c.name,
       votes: vs.length,
-      votesTotal: Math.round(votesTotal * 100) / 100,
+      gusto: r2(byRole.gusto),
+      forno: r2(byRole.forno),
+      votesTotal: r2(votesTotal),
       bonus,
-      total: Math.round(total * 100) / 100,
-      average: vs.length ? Math.round((votesTotal / vs.length) * 100) / 100 : 0,
+      total: r2(votesTotal + bonus),
       perCriterion,
-    };
-  });
-  rows.sort((a, b) => b.total - a.total || b.average - a.average);
-  let pos = 0, prev = null;
-  rows.forEach((r, i) => {
-    if (r.total !== prev) pos = i + 1;
-    r.position = pos;
-    prev = r.total;
-  });
-  return rows;
+    });
+  }
+  const out = orphan.rows.length ? [...groups, orphan] : groups;
+  for (const g of out) {
+    g.rows.sort((a, b) => b.total - a.total || b.gusto - a.gusto);
+    let pos = 0, prev = null;
+    g.rows.forEach((r, i) => {
+      if (r.total !== prev) pos = i + 1;
+      r.position = pos;
+      prev = r.total;
+    });
+  }
+  return out.filter((g) => g.rows.length);
 }
 
 // ---------- Helpers HTTP ----------
@@ -218,7 +289,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (m === 'GET' && p === '/api/results') {
       if (state.event.status !== 'revealed') return send(res, 403, { error: 'Classifica non ancora rivelata', eventStatus: state.event.status });
-      return send(res, 200, { name: state.event.name, criteria: state.event.criteria, ranking: ranking() });
+      return send(res, 200, { name: state.event.name, categories: ranking() });
     }
 
     // --- API giudice ---
@@ -230,22 +301,36 @@ const server = http.createServer(async (req, res) => {
         const mine = state.votes.filter((v) => v.judgeId === judge.id).map((v) => v.competitorId);
         return send(res, 200, {
           name: judge.name,
+          role: judge.role,
+          roleLabel: ROLES[judge.role],
           event: { name: state.event.name, status: state.event.status },
-          // I giudici vedono solo il numero: il nome del concorrente non esce mai da qui.
-          competitors: state.competitors.map((c) => ({ number: c.number, code: c.code, voted: mine.includes(c.id) })),
+          // I giudici vedono solo numero e categoria: il nome del concorrente non esce mai da qui.
+          competitors: state.competitors.filter((c) => mustVote(judge, c)).map((c) => ({
+            number: c.number, code: c.code, category: (categoryOf(c) || {}).name || '', voted: mine.includes(c.id),
+          })),
         });
       }
       if (m === 'GET' && p.startsWith('/api/judge/competitor/')) {
         const c = state.competitors.find((x) => x.code === p.split('/').pop());
         if (!c) return send(res, 404, { error: 'QR concorrente non valido' });
         const voted = state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id);
+        const cat = categoryOf(c);
+        const criteria = criteriaFor(c, judge);
+        if (!criteria.length) {
+          return send(res, 409, {
+            error: cat
+              ? `La categoria "${cat.name}" non prevede voti dei ${ROLES[judge.role].toLowerCase()}i: questo concorrente non va votato da te.`
+              : `Il concorrente #${c.number} non ha ancora una categoria: avvisa la regia.`,
+          });
+        }
         return send(res, 200, {
-          competitor: { number: c.number, code: c.code },
+          competitor: { number: c.number, code: c.code, category: cat.name },
           voted,
           eventStatus: state.event.status,
-          criteria: state.event.criteria.map(({ id, label }) => ({ id, label })),
+          criteria: criteria.map(({ id, label, type }) => ({ id, label, type })),
           scaleMin: state.event.scaleMin,
           scaleMax: state.event.scaleMax,
+          checkPoints: state.event.checkPoints,
         });
       }
       if (m === 'POST' && p === '/api/judge/vote') {
@@ -256,14 +341,24 @@ const server = http.createServer(async (req, res) => {
         if (state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id)) {
           return send(res, 409, { error: 'Hai già votato questo concorrente. Il voto è definitivo.' });
         }
+        const criteria = criteriaFor(c, judge);
+        if (!criteria.length) return send(res, 409, { error: 'Questo concorrente non va votato da te.' });
         const scores = {};
         const { scaleMin: lo, scaleMax: hi } = state.event;
-        for (const cr of state.event.criteria) {
-          const n = Number(body.scores && body.scores[cr.id]);
-          if (!Number.isFinite(n) || n < lo || n > hi) return send(res, 400, { error: `Voto mancante o fuori scala per "${cr.label}"` });
-          scores[cr.id] = n;
+        const given = body.scores || {};
+        let total = 0;
+        for (const cr of criteria) {
+          if (cr.type === 'check') {
+            if (typeof given[cr.id] !== 'boolean') return send(res, 400, { error: `Indica se "${cr.label}" è rispettato o no` });
+            scores[cr.id] = given[cr.id];
+          } else {
+            const n = Number(given[cr.id]);
+            if (!Number.isInteger(n) || n < lo || n > hi) return send(res, 400, { error: `Voto mancante o fuori scala (${lo}–${hi}) per "${cr.label}"` });
+            scores[cr.id] = n;
+          }
+          total += points(cr, scores[cr.id]);
         }
-        state.votes.push({ judgeId: judge.id, competitorId: c.id, scores, total: weightedScore(scores), at: new Date().toISOString() });
+        state.votes.push({ judgeId: judge.id, competitorId: c.id, role: judge.role, scores, total, at: new Date().toISOString() });
         save();
         return send(res, 200, { ok: true });
       }
@@ -287,34 +382,39 @@ const server = http.createServer(async (req, res) => {
         // Finché la classifica non è rivelata l'admin vede SOLO chi ha votato, mai i punteggi.
         const progress = state.competitors.map((c) => ({
           ...c,
+          judgesExpected: state.judges.filter((j) => mustVote(j, c)).map((j) => j.id),
           judgesVoted: state.judges.filter((j) => state.votes.some((v) => v.judgeId === j.id && v.competitorId === c.id)).map((j) => j.id),
+          hasVotes: state.votes.some((v) => v.competitorId === c.id),
         }));
+        const expectedVotes = progress.reduce((a, c) => a + c.judgesExpected.length, 0);
         return send(res, 200, {
           event: ev,
           base: baseUrl(req),
           suggestedBase: `http://${lanAddress()}:${PORT}`,
           competitors: progress,
-          judges: state.judges,
+          judges: state.judges.map((j) => ({ ...j, roleLabel: ROLES[j.role], hasVotes: state.votes.some((v) => v.judgeId === j.id) })),
+          roles: ROLES,
           adjustments: state.adjustments,
           votesCount: state.votes.length,
-          expectedVotes: state.judges.length * state.competitors.length,
+          expectedVotes,
           ranking: ev.status === 'revealed' ? ranking() : null,
         });
       }
       if (m === 'POST' && p === '/api/admin/settings') {
         if (typeof body.name === 'string') ev.name = body.name.trim() || ev.name;
         if (typeof body.baseUrl === 'string') ev.baseUrl = body.baseUrl.trim().replace(/\/+$/, '');
-        if (Array.isArray(body.criteria)) {
-          if (state.votes.length) return send(res, 409, { error: 'Non puoi cambiare i criteri dopo che sono arrivati voti.' });
-          ev.criteria = body.criteria
-            .filter((c) => c && String(c.label || '').trim())
-            .map((c, i) => ({ id: 'c' + (i + 1), label: String(c.label).trim(), weight: Number(c.weight) > 0 ? Number(c.weight) : 1 }));
-        }
-        if (body.scaleMin != null || body.scaleMax != null) {
-          if (state.votes.length) return send(res, 409, { error: 'Non puoi cambiare la scala dopo che sono arrivati voti.' });
-          const lo = Number(body.scaleMin), hi = Number(body.scaleMax);
-          if (!(hi > lo)) return send(res, 400, { error: 'Scala non valida' });
-          ev.scaleMin = lo; ev.scaleMax = hi;
+        if (typeof body.rules === 'string' || body.scaleMin != null || body.scaleMax != null || body.checkPoints != null) {
+          if (state.votes.length) return send(res, 409, { error: 'Non puoi cambiare il regolamento dopo che sono arrivati voti.' });
+          const lo = Number(body.scaleMin ?? ev.scaleMin), hi = Number(body.scaleMax ?? ev.scaleMax), cp = Number(body.checkPoints ?? ev.checkPoints);
+          if (!Number.isInteger(lo) || !Number.isInteger(hi) || !(hi > lo)) return send(res, 400, { error: 'Scala non valida' });
+          if (!(cp > 0)) return send(res, 400, { error: 'Punti della lista di controllo non validi' });
+          if (typeof body.rules === 'string') {
+            const parsed = parseRules(body.rules);
+            if (parsed.errors.length) return send(res, 400, { error: parsed.errors.join(' ') });
+            ev.rules = body.rules.trim();
+            ev.categories = parsed.categories;
+          }
+          ev.scaleMin = lo; ev.scaleMax = hi; ev.checkPoints = cp;
         }
         save();
         return send(res, 200, { ok: true });
@@ -323,23 +423,45 @@ const server = http.createServer(async (req, res) => {
         // Il nome è facoltativo: l'abbinamento numero → nome può stare su un foglio Excel a parte.
         const number = String(body.number || '').trim() || nextNumber();
         if (state.competitors.some((c) => c.number === number)) return send(res, 409, { error: `Il numero ${number} esiste già.` });
-        addCompetitor(number, String(body.name || '').trim());
+        addCompetitor(number, String(body.name || '').trim(), String(body.categoryId || ''));
         save();
         return send(res, 200, { ok: true });
       }
       if (m === 'POST' && p === '/api/admin/competitor/import') {
         // Righe incollate da Excel/CSV: "numero<TAB>nome", "numero;nome" o solo "numero".
+        // Una colonna che coincide con il nome di una categoria viene usata come categoria.
         let added = 0, updated = 0;
         for (const line of String(body.text || '').split(/\r?\n/)) {
-          const [num, ...rest] = line.split(/[\t;,]/).map((x) => x.trim().replace(/^"|"$/g, ''));
+          const [num, ...rest] = line.split(/[\t;]/).map((x) => x.trim().replace(/^"|"$/g, ''));
           if (!num || /^(n|n°|num|numero|#)$/i.test(num)) continue;
-          const name = rest.join(' ').trim();
+          let categoryId = '';
+          const nameParts = [];
+          for (const f of rest) {
+            const cat = f && state.event.categories.find((k) => k.id === slug(f));
+            if (cat && !categoryId) categoryId = cat.id; else if (f) nameParts.push(f);
+          }
+          const name = nameParts.join(' ').trim();
           const ex = state.competitors.find((c) => c.number === num);
-          if (ex) { if (name && ex.name !== name) { ex.name = name; updated++; } }
-          else { addCompetitor(num, name); added++; }
+          if (ex) {
+            let changed = false;
+            if (name && ex.name !== name) { ex.name = name; changed = true; }
+            if (categoryId && ex.categoryId !== categoryId && !state.votes.some((v) => v.competitorId === ex.id)) { ex.categoryId = categoryId; changed = true; }
+            if (changed) updated++;
+          } else { addCompetitor(num, name, categoryId); added++; }
         }
         save();
         return send(res, 200, { ok: true, added, updated });
+      }
+      if (m === 'POST' && p === '/api/admin/competitor/update') {
+        const c = state.competitors.find((x) => x.id === body.id);
+        if (!c) return send(res, 404, { error: 'Concorrente non trovato' });
+        if (typeof body.categoryId === 'string' && body.categoryId !== c.categoryId) {
+          if (state.votes.some((v) => v.competitorId === c.id)) return send(res, 409, { error: 'Ha già dei voti: non si può cambiare categoria.' });
+          c.categoryId = body.categoryId;
+        }
+        if (typeof body.name === 'string') c.name = body.name.trim();
+        save();
+        return send(res, 200, { ok: true });
       }
       if (m === 'POST' && p === '/api/admin/adjust') {
         // Bonus/malus dell'organizzatore (es. +2 / -2), sommato al totale dei giudici.
@@ -359,7 +481,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (m === 'POST' && p === '/api/admin/judge') {
         if (!String(body.name || '').trim()) return send(res, 400, { error: 'Nome obbligatorio' });
-        addJudge(String(body.name).trim());
+        addJudge(String(body.name).trim(), body.role);
         save();
         return send(res, 200, { ok: true });
       }
@@ -392,8 +514,14 @@ const server = http.createServer(async (req, res) => {
       }
       if (m === 'GET' && p === '/api/admin/export.csv') {
         if (ev.status !== 'revealed') return send(res, 403, 'Disponibile solo dopo la rivelazione');
-        const head = ['Posizione', 'Numero', 'Concorrente', 'Voti', 'Totale giudici', 'Bonus/malus', 'Totale', 'Media', ...ev.criteria.map((c) => c.label)];
-        const lines = [head, ...ranking().map((r) => [r.position, r.number, r.name, r.votes, r.votesTotal, r.bonus, r.total, r.average, ...ev.criteria.map((c) => r.perCriterion[c.id])])];
+        // Una sezione per categoria, ognuna con le sue colonne di criteri (media dei giudici).
+        const lines = [];
+        for (const g of ranking()) {
+          if (lines.length) lines.push([]);
+          lines.push([g.name.toUpperCase()]);
+          lines.push(['Posizione', 'Numero', 'Concorrente', 'Voti', 'Giudici gusto', 'Giudici forno', 'Bonus/malus', 'Totale', ...g.criteria.map((c) => c.label)]);
+          for (const r of g.rows) lines.push([r.position, r.number, r.name, r.votes, r.gusto, r.forno, r.bonus, r.total, ...g.criteria.map((c) => r.perCriterion[c.id] ?? '')]);
+        }
         const csv = lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
         return send(res, 200, '﻿' + csv, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="classifica.csv"' });
       }
