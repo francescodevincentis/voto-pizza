@@ -21,7 +21,7 @@ const DEFAULT_RULES = [
   ...['Classica', 'Gourmet', 'Contemporanea', 'Chef', 'Senza Glutine', 'In pala', 'Amatoriale', 'Genio e follia']
     .map((n) => `# ${n}\n${STANDARD}`),
   `# Napoletana
-forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | Mozzarella 80/100 gr | Mozzarella tagliata a listelli | Sale sul pomodoro | Basilico in cottura | Oliera | Cottura 90 secondi | Stesura con schiaffo | Infornata con rotatoria senza fuoriuscita | Panetto 180/250 gr | Bordo 1–2 cm (max 0,4) | Straccio per pulire la pizza | La pizza non deve superare 35 cm ø`,
+forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | Mozzarella 80/100 gr | Mozzarella tagliata a listelli | Sale sul pomodoro | Basilico in cottura | Oliera | Cottura 90 secondi | Stesura con schiaffo | Infornata con rotatoria senza fuoriuscita | Panetto 180/250 gr | Bordo da 1 a 2 cm (oltre: penalità) | Straccio per pulire la pizza | La pizza non deve superare 35 cm ø`,
   `# Ruota di carro
 forno: Etica professionale | Pulizia
 forno ±5: Diametro 35–40 cm ø`,
