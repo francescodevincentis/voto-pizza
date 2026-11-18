@@ -304,10 +304,21 @@ document.addEventListener('change', (e) => {
     act('/api/admin/competitor/update', { id, categoryIds: [...c.categoryIds, e.target.value] }, `Gara aggiunta al #${c.number}`);
   }
 });
+// Se ha già voti (o bonus) chiede una seconda conferma e li cancella insieme.
+async function del(url, id, what) {
+  let r = await api(url, { id });
+  if (r.http === 409 && r.needsForce) {
+    const parts = [r.votes ? `${r.votes} voti` : '', r.adjustments ? `${r.adjustments} bonus/malus` : ''].filter(Boolean).join(' e ');
+    if (!confirm(`Questo ${what} ha già ${parts}. Eliminandolo verranno cancellati anche quelli, senza possibilità di recupero. Procedere?`)) return;
+    r = await api(url, { id, force: true });
+  }
+  if (r.http !== 200) flash(r.error || 'Errore'); else flash(`${what[0].toUpperCase() + what.slice(1)} eliminato`, true);
+  load();
+}
 document.addEventListener('click', (e) => {
   const c = e.target.dataset.delComp, j = e.target.dataset.delJudge;
-  if (c && confirm('Eliminare il concorrente?')) act('/api/admin/competitor/delete', { id: c });
-  if (j && confirm('Eliminare il giudice?')) act('/api/admin/judge/delete', { id: j });
+  if (c && confirm('Eliminare il concorrente?')) del('/api/admin/competitor/delete', c, 'concorrente');
+  if (j && confirm('Eliminare il giudice?')) del('/api/admin/judge/delete', j, 'giudice');
   const rm = e.target.dataset.rmCat;
   if (rm) {
     const c = S.competitors.find((x) => x.id === rm);

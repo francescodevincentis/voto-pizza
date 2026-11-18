@@ -649,10 +649,14 @@ const server = http.createServer(async (req, res) => {
       }
       if (m === 'POST' && (p === '/api/admin/competitor/delete' || p === '/api/admin/judge/delete')) {
         const isJudge = p.includes('judge');
-        if (state.votes.some((v) => (isJudge ? v.judgeId : v.competitorId) === body.id) ||
-            (!isJudge && state.adjustments.some((a) => a.competitorId === body.id))) {
-          return send(res, 409, { error: 'Ha già dei voti registrati: non si può eliminare.' });
+        const votes = state.votes.filter((v) => (isJudge ? v.judgeId : v.competitorId) === body.id).length;
+        const adj = isJudge ? 0 : state.adjustments.filter((a) => a.competitorId === body.id).length;
+        // Con voti o bonus serve una seconda conferma: vengono cancellati insieme.
+        if ((votes || adj) && !body.force) {
+          return send(res, 409, { needsForce: true, votes, adjustments: adj, error: 'Ha già dei voti registrati.' });
         }
+        state.votes = state.votes.filter((v) => (isJudge ? v.judgeId : v.competitorId) !== body.id);
+        if (!isJudge) state.adjustments = state.adjustments.filter((a) => a.competitorId !== body.id);
         const list = isJudge ? state.judges : state.competitors;
         const i = list.findIndex((x) => x.id === body.id);
         if (i >= 0) list.splice(i, 1);
