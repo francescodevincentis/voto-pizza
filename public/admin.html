@@ -95,13 +95,14 @@
         <form id="addComp" class="row" style="margin-bottom:10px">
           <input name="number" placeholder="N°" style="width:70px">
           <select name="categoryId" id="addCompCat" required></select>
+          <select name="teamId" id="addCompTeam"></select>
           <input name="name" class="grow" placeholder="Nome (facoltativo, i giudici non lo vedono)">
           <button>Aggiungi</button>
         </form>
         <table id="compTable"></table>
         <details style="margin-top:12px">
           <summary class="small">Importa da Excel</summary>
-          <p class="muted small">Copia da Excel le colonne <b>Numero</b>, <b>Gara</b> e (se vuoi) <b>Nome</b> e incollale qui. La gara va scritta come nel regolamento (es. Napoletana). Chi fa più gare: più colonne, più gare nella stessa cella separate da virgola, oppure una riga per gara con lo stesso numero. I numeri già presenti vengono aggiornati, non duplicati.</p>
+          <p class="muted small">Copia da Excel le colonne <b>Numero</b>, <b>Gara</b> e (se vuoi) <b>Team</b> e <b>Nome</b> e incollale qui. Il team va scritto come nell'elenco (es. Team Diavola o solo Diavola); se è già pieno il concorrente resta senza team. La gara va scritta come nel regolamento (es. Napoletana). Chi fa più gare: più colonne, più gare nella stessa cella separate da virgola, oppure una riga per gara con lo stesso numero. I numeri già presenti vengono aggiornati, non duplicati.</p>
           <textarea id="importText" rows="5" style="width:100%" placeholder="01&#9;Classica&#9;Pizzeria Da Mario&#10;02&#9;Napoletana&#9;Pizzeria Bella Napoli"></textarea>
           <button id="importBtn" type="button">Importa</button>
         </details>
@@ -140,7 +141,10 @@
         <label class="small muted">Indirizzo usato nei QR</label>
         <input id="setBase" style="width:100%" placeholder="">
         <p class="muted small" id="baseHint"></p>
-        <button class="primary" id="saveSettings">Salva</button>
+        <label class="small muted">Team (uno per riga; cambiare il nome non sposta i concorrenti)</label>
+        <textarea id="setTeams" rows="6" style="width:100%"></textarea>
+        <label class="small muted">Massimo concorrenti per team <input id="setTeamSize" type="number" min="1" style="width:70px"></label>
+        <div style="margin-top:10px"><button class="primary" id="saveSettings">Salva</button></div>
         <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
         <h2>Azzera</h2>
         <p class="muted small">Cancella tutti i dati (voti compresi).</p>
@@ -214,7 +218,11 @@ function render() {
       <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>N°</th><th>Concorrente</th><th>Totale</th><th>Voti</th>${g.criteria.map((c) => `<th title="Media dei giudici di ${c.role}">${esc(c.label)}<br><span style="text-transform:none;font-weight:400">media</span></th>`).join('')}</tr>
       ${g.rows.map((r) => `<tr><td><b>${r.position}°</b></td><td>#${esc(r.number)}</td><td>${esc(r.name)}</td><td><b>${r.total}</b></td><td>${r.votes}</td>${g.criteria.map((c) => `<td>${r.perCriterion[c.id] ?? '–'}</td>`).join('')}</tr>`).join('')}
       </table></div>`).join('')}
-      <p class="muted small">Totale = somma dei punti di tutti i giudici (gusto + forno, lista di controllo compresa) + bonus/malus, che è conteggiato ma non mostrato. Colonne dei criteri = media dei voti dei giudici.</p>`;
+      <p class="muted small">Totale = somma dei punti di tutti i giudici (gusto + forno, lista di controllo compresa) + bonus/malus, che è conteggiato ma non mostrato. Colonne dei criteri = media dei voti dei giudici.</p>
+      ${S.teamRanking && S.teamRanking.length ? `<h3 class="cat">👥 Classifica a squadre</h3>
+      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>Team</th><th>Totale</th><th>Concorrenti (totale di ciascuno, tutte le gare)</th></tr>
+      ${S.teamRanking.map((t) => `<tr><td><b>${t.position}°</b></td><td>${esc(t.name)}</td><td><b>${t.total}</b></td><td class="small">${t.members.map((m) => `#${esc(m.number)} ${esc(m.name)} (${m.total})`).join(' · ')}</td></tr>`).join('')}
+      </table></div><p class="muted small">Punteggio del team = somma dei totali dei suoi concorrenti in tutte le gare.</p>` : ''}`;
   }
 
   // Bonus / malus
@@ -237,12 +245,22 @@ function render() {
       ? `<td class="c"><span class="dot ${c.judgesVoted.includes(j.id) ? 'on' : ''}" style="display:inline-block"></span></td>`
       : '<td class="c na" title="Non vota questa categoria"></td>').join('')}<td>${c.judgesVoted.length}/${c.judgesExpected.length}</td></tr>`).join('');
 
+  const teamCount = (id, except) => S.competitors.filter((c) => c.teamId === id && c.id !== except).length;
+  // Team pieni non selezionabili (tranne quello attuale del concorrente).
+  const teamOptions = (sel, except) => `<option value="">— team —</option>` + ev.teams.map((t) => {
+    const n = teamCount(t.id, except), full = n >= ev.teamSize && t.id !== sel;
+    return `<option value="${esc(t.id)}" ${t.id === sel ? 'selected' : ''} ${full ? 'disabled' : ''}>${esc(t.name)} (${n + (t.id === sel && except ? 1 : 0)}/${ev.teamSize})${full ? ' · pieno' : ''}</option>`;
+  }).join('');
+  if (document.activeElement !== $('addCompTeam')) { const v = $('addCompTeam').value; $('addCompTeam').innerHTML = teamOptions(v); if ($('addCompTeam').selectedOptions[0] && $('addCompTeam').selectedOptions[0].disabled) $('addCompTeam').value = ''; }
+  if (document.activeElement !== $('setTeams')) $('setTeams').value = ev.teams.map((t) => t.name).join('\n');
+  if (document.activeElement !== $('setTeamSize')) $('setTeamSize').value = ev.teamSize;
   const catOptions = (sel, skip = [], first = '— gara —') => `<option value="">${first}</option>` + ev.categories.filter((k) => !skip.includes(k.id)).map((k) => `<option value="${esc(k.id)}" ${k.id === sel ? 'selected' : ''}>${esc(k.name)}</option>`).join('');
   if (document.activeElement !== $('addCompCat')) { const v = $('addCompCat').value; $('addCompCat').innerHTML = catOptions(v); }
   // Gare del concorrente: una pillola per gara (✕ per toglierla) + menu per aggiungerne un'altra.
   $('compTable').innerHTML = S.competitors.map((c) => `<tr><td>#${esc(c.number)}</td>
     <td>${c.categoryIds.map((id) => `<span class="gara">${esc(catName(id))}${c.votedCats.includes(id) ? '' : ` <button class="x" data-rm-cat="${c.id}" data-cat="${esc(id)}" title="Togli questa gara">✕</button>`}</span>`).join('')}
       ${c.categoryIds.length < ev.categories.length ? `<select data-add-cat="${c.id}" style="padding:4px 6px;font-size:.8rem">${catOptions('', c.categoryIds, '+ gara')}</select>` : ''}</td>
+    <td><select data-team-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px">${teamOptions(c.teamId, c.id)}</select></td>
     <td>${esc(c.name)}</td><td><a href="${S.base}/v/${c.code}" target="_blank" class="small">link</a></td><td style="text-align:right"><button class="ghost small" data-del-comp="${c.id}">✕</button></td></tr>`).join('');
   $('judgeTable').innerHTML = S.judges.map((j) => `<tr><td>${esc(j.name)}</td><td><span class="tag-role ${j.role}">${esc(j.roleLabel.replace('Giudice ', ''))}</span></td><td><a href="${S.base}/j/${j.token}" target="_blank" class="small">link badge</a></td><td style="text-align:right"><button class="ghost small" data-del-judge="${j.id}">✕</button></td></tr>`).join('');
 
@@ -268,16 +286,18 @@ $('saveRules').onclick = async () => {
   rulesDraft = null;
   load();
 };
-$('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value }, 'Impostazioni salvate');
+$('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value, teams: $('setTeams').value.split('\n'), teamSize: Number($('setTeamSize').value) }, 'Impostazioni salvate');
 
-$('addComp').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/competitor', { number: f.number.value, name: f.name.value, categoryId: f.categoryId.value }); f.number.value = ''; f.name.value = ''; };
+$('addComp').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/competitor', { number: f.number.value, name: f.name.value, categoryId: f.categoryId.value, teamId: f.teamId.value }); f.number.value = ''; f.name.value = ''; };
 $('importBtn').onclick = async () => {
   const r = await api('/api/admin/competitor/import', { text: $('importText').value });
-  if (r.http !== 200) flash(r.error || 'Errore'); else { flash(`Importati ${r.added} nuovi, aggiornati ${r.updated}`, true); $('importText').value = ''; }
+  if (r.http !== 200) flash(r.error || 'Errore'); else { flash(`Importati ${r.added} nuovi, aggiornati ${r.updated}` + (r.teamFull && r.teamFull.length ? `. Team pieno, da sistemare: #${r.teamFull.join(', #')}` : ''), !(r.teamFull && r.teamFull.length)); $('importText').value = ''; }
   load();
 };
 $('addJudge').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/judge', { name: f.name.value, role: f.role.value }); f.name.value = ''; };
 document.addEventListener('change', (e) => {
+  const tc = e.target.dataset.teamComp;
+  if (tc) act('/api/admin/competitor/update', { id: tc, teamId: e.target.value }, 'Team aggiornato');
   const id = e.target.dataset.addCat;
   if (id && e.target.value) {
     const c = S.competitors.find((x) => x.id === id);

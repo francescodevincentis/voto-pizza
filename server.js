@@ -27,6 +27,13 @@ forno: Etica professionale | Pulizia
 forno ±5: Diametro 35–40 cm ø`,
 ].join('\n\n');
 
+const DEFAULT_TEAMS = [
+  'Margherita', 'Marinara', 'Diavola', 'Capricciosa', 'Quattro Stagioni', 'Bufalina', 'Cornicione', 'Lievito Madre',
+  'Forno a Legna', "Pala d'Oro", 'Fior di Latte', 'Basilico', 'San Marzano', 'Oliera', 'Biga', 'Poolish',
+  'Vesuvio', 'Partenope', 'Mozzarella', 'Pomodorino',
+];
+const defaultTeams = () => DEFAULT_TEAMS.map((name, i) => ({ id: 't' + (i + 1), name: 'Team ' + name }));
+
 const ROLES = { gusto: 'Giudice di gusto', forno: 'Giudice di forno' };
 
 function slug(s) {
@@ -77,6 +84,8 @@ function defaultState() {
       scaleMin: 1,
       scaleMax: 100,
       checkPoints: 5,
+      teamSize: 4, // massimo concorrenti per team
+      teams: defaultTeams(),
       rules: DEFAULT_RULES,
       categories: parseRules(DEFAULT_RULES).categories,
     },
@@ -97,10 +106,12 @@ try {
 }
 
 if (!Array.isArray(state.adjustments)) state.adjustments = [];
+if (!Array.isArray(state.event.teams)) { state.event.teams = defaultTeams(); state.event.teamSize = 4; }
 for (const j of state.judges) if (!ROLES[j.role]) j.role = 'gusto';
 // Versione con una sola categoria per concorrente -> elenco di gare.
 for (const c of state.competitors) {
   if (!Array.isArray(c.categoryIds)) c.categoryIds = c.categoryId ? [c.categoryId] : [];
+  if (typeof c.teamId !== 'string') c.teamId = '';
   delete c.categoryId;
 }
 for (const v of state.votes || []) if (!('categoryId' in v)) v.categoryId = (state.competitors.find((c) => c.id === v.competitorId) || { categoryIds: [''] }).categoryIds[0] || '';
@@ -125,12 +136,13 @@ function seedDemo() {
   // Due concorrenti iscritti a più gare, per provare il caso.
   state.competitors[0].categoryIds.push('napoletana');
   state.competitors[2].categoryIds.push('genio-e-follia', 'ruota-di-carro');
+  state.competitors.forEach((c, i) => { c.teamId = state.event.teams[i % 3].id; });
   ['Gusto 1', 'Gusto 2', 'Gusto 3'].forEach((n) => addJudge(n, 'gusto'));
   ['Forno 1', 'Forno 2'].forEach((n) => addJudge(n, 'forno'));
 }
 
-function addCompetitor(number, name, categoryIds) {
-  const c = { id: token(6), number: String(number), name: String(name || ''), categoryIds: validCats(categoryIds), code: token(6) };
+function addCompetitor(number, name, categoryIds, teamId = '') {
+  const c = { id: token(6), number: String(number), name: String(name || ''), categoryIds: validCats(categoryIds), teamId, code: token(6) };
   state.competitors.push(c);
   return c;
 }
@@ -144,6 +156,22 @@ function addJudge(name, role) {
   const j = { id: token(6), name: String(name), role: ROLES[role] ? role : 'gusto', token: token(12) };
   state.judges.push(j);
   return j;
+}
+
+// Team: ogni concorrente in un solo team, al massimo teamSize concorrenti per team.
+function teamCount(teamId, exceptId) {
+  return state.competitors.filter((c) => c.teamId === teamId && c.id !== exceptId).length;
+}
+function teamError(teamId, exceptId) {
+  if (!teamId) return null;
+  const t = state.event.teams.find((x) => x.id === teamId);
+  if (!t) return 'Team non trovato';
+  if (teamCount(teamId, exceptId) >= state.event.teamSize) return `${t.name} è già al completo (${state.event.teamSize} concorrenti): scegli un altro team.`;
+  return null;
+}
+function teamByName(s) {
+  const k = slug(String(s).replace(/^team\s+/i, ''));
+  return state.event.teams.find((t) => slug(t.name.replace(/^team\s+/i, '')) === k) || null;
 }
 
 function validCats(ids) {
@@ -216,6 +244,24 @@ function ranking() {
     });
   }
   return out.filter((g) => g.rows.length);
+}
+
+// Classifica a squadre: punteggio del team = somma dei totali dei suoi concorrenti in tutte le gare.
+function teamRanking() {
+  const totals = {};
+  for (const g of ranking()) for (const r of g.rows) totals[r.number] = (totals[r.number] || 0) + r.total;
+  const rows = state.event.teams.map((t) => {
+    const members = state.competitors.filter((c) => c.teamId === t.id);
+    return {
+      name: t.name,
+      members: members.map((c) => ({ number: c.number, name: c.name, total: r2(totals[c.number] || 0) })),
+      total: r2(members.reduce((a, c) => a + (totals[c.number] || 0), 0)),
+    };
+  }).filter((t) => t.members.length);
+  rows.sort((a, b) => b.total - a.total);
+  let pos = 0, prev = null;
+  rows.forEach((r, i) => { if (r.total !== prev) pos = i + 1; r.position = pos; prev = r.total; });
+  return rows;
 }
 
 // Il bonus/malus conta nel totale ma non si mostra mai: niente colonna bonus né subtotali gusto/forno
@@ -335,7 +381,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (m === 'GET' && p === '/api/results') {
       if (state.event.status !== 'revealed') return send(res, 403, { error: 'Classifica non ancora rivelata', eventStatus: state.event.status });
-      return send(res, 200, { name: state.event.name, categories: publicRanking() });
+      return send(res, 200, { name: state.event.name, categories: publicRanking(), teams: teamRanking() });
     }
 
     // --- API giudice ---
@@ -462,11 +508,26 @@ const server = http.createServer(async (req, res) => {
           votesCount: state.votes.length,
           expectedVotes,
           ranking: ev.status === 'revealed' ? publicRanking() : null,
+          teamRanking: ev.status === 'revealed' ? teamRanking() : null,
         });
       }
       if (m === 'POST' && p === '/api/admin/settings') {
         if (typeof body.name === 'string') ev.name = body.name.trim() || ev.name;
         if (typeof body.baseUrl === 'string') ev.baseUrl = body.baseUrl.trim().replace(/\/+$/, '');
+        if (Array.isArray(body.teams)) {
+          // Rinomina i team (stesso ordine = stesso team). Si possono aggiungere, non togliere quelli con concorrenti.
+          const names = body.teams.map((x) => String(x || '').trim()).filter(Boolean);
+          const used = ev.teams.filter((t, i) => i >= names.length && state.competitors.some((c) => c.teamId === t.id));
+          if (used.length) return send(res, 409, { error: `${used[0].name} ha concorrenti: non si può togliere.` });
+          ev.teams = names.map((name, i) => ({ id: (ev.teams[i] || {}).id || 't' + token(4), name }));
+        }
+        if (body.teamSize != null) {
+          const n = Number(body.teamSize);
+          if (!Number.isInteger(n) || n < 1) return send(res, 400, { error: 'Numero massimo per team non valido' });
+          const over = ev.teams.find((t) => teamCount(t.id) > n);
+          if (over) return send(res, 409, { error: `${over.name} ha già più di ${n} concorrenti.` });
+          ev.teamSize = n;
+        }
         if (typeof body.rules === 'string' || body.scaleMin != null || body.scaleMax != null || body.checkPoints != null) {
           if (state.votes.length) return send(res, 409, { error: 'Non puoi cambiare il regolamento dopo che sono arrivati voti.' });
           const lo = Number(body.scaleMin ?? ev.scaleMin), hi = Number(body.scaleMax ?? ev.scaleMax), cp = Number(body.checkPoints ?? ev.checkPoints);
@@ -487,7 +548,13 @@ const server = http.createServer(async (req, res) => {
         // Il nome è facoltativo: l'abbinamento numero → nome può stare su un foglio Excel a parte.
         const number = String(body.number || '').trim() || nextNumber();
         const ex = state.competitors.find((c) => c.number === number);
+        const teamId = String(body.teamId || '');
+        if (ex && teamId && teamId !== ex.teamId) {
+          const err = teamError(teamId, ex.id);
+          if (err) return send(res, 409, { error: err });
+        }
         if (ex) {
+          if (teamId && teamId !== ex.teamId) { ex.teamId = teamId; if (!validCats(body.categoryId).filter((id) => !ex.categoryIds.includes(id)).length) { save(); return send(res, 200, { ok: true }); } }
           // Stesso numero con un'altra gara: si aggiunge la gara al concorrente esistente.
           const add = validCats(body.categoryId).filter((id) => !ex.categoryIds.includes(id));
           if (!add.length) return send(res, 409, { error: `Il numero ${number} esiste già${body.categoryId ? ' in questa gara' : ''}.` });
@@ -496,7 +563,9 @@ const server = http.createServer(async (req, res) => {
           save();
           return send(res, 200, { ok: true });
         }
-        addCompetitor(number, String(body.name || '').trim(), body.categoryId ? [body.categoryId] : []);
+        const err = teamError(teamId);
+        if (err) return send(res, 409, { error: err });
+        addCompetitor(number, String(body.name || '').trim(), body.categoryId ? [body.categoryId] : [], teamId);
         save();
         return send(res, 200, { ok: true });
       }
@@ -504,16 +573,21 @@ const server = http.createServer(async (req, res) => {
         // Righe incollate da Excel/CSV: "numero<TAB>nome", "numero;nome" o solo "numero".
         // Una colonna che coincide con il nome di una categoria viene usata come categoria.
         let added = 0, updated = 0;
+        const skipped = [];
         for (const line of String(body.text || '').split(/\r?\n/)) {
           const [num, ...rest] = line.split(/[\t;]/).map((x) => x.trim().replace(/^"|"$/g, ''));
           if (!num || /^(n|n°|num|numero|#)$/i.test(num)) continue;
           const catIds = [];
           const nameParts = [];
+          let teamId = '';
           for (const f of rest) {
             // Anche più gare nella stessa cella, separate da virgola o "+".
             const parts = f ? f.split(/\s*[,+\/]\s*/) : [];
             const ids = parts.map((x) => (state.event.categories.find((k) => k.id === slug(x)) || {}).id);
-            if (parts.length && ids.every(Boolean)) catIds.push(...ids); else if (f) nameParts.push(f);
+            const team = f && teamByName(f);
+            if (parts.length && ids.every(Boolean)) catIds.push(...ids);
+            else if (team && !teamId) teamId = team.id;
+            else if (f) nameParts.push(f);
           }
           const name = nameParts.join(' ').trim();
           const ex = state.competitors.find((c) => c.number === num);
@@ -521,11 +595,15 @@ const server = http.createServer(async (req, res) => {
             let changed = false;
             if (name && ex.name !== name) { ex.name = name; changed = true; }
             for (const id of validCats(catIds)) if (!ex.categoryIds.includes(id)) { ex.categoryIds.push(id); changed = true; }
+            if (teamId && teamId !== ex.teamId) { if (teamError(teamId, ex.id)) skipped.push(num); else { ex.teamId = teamId; changed = true; } }
             if (changed) updated++;
-          } else { addCompetitor(num, name, catIds); added++; }
+          } else {
+            if (teamId && teamError(teamId)) { skipped.push(num); teamId = ''; }
+            addCompetitor(num, name, catIds, teamId); added++;
+          }
         }
         save();
-        return send(res, 200, { ok: true, added, updated });
+        return send(res, 200, { ok: true, added, updated, teamFull: skipped });
       }
       if (m === 'POST' && p === '/api/admin/competitor/update') {
         const c = state.competitors.find((x) => x.id === body.id);
@@ -536,6 +614,11 @@ const server = http.createServer(async (req, res) => {
             (state.votes.some((v) => v.competitorId === c.id && v.categoryId === id) || state.adjustments.some((a) => a.competitorId === c.id && a.categoryId === id)));
           if (locked.length) return send(res, 409, { error: `Non puoi togliere la gara "${catById(locked[0]).name}": ha già voti o bonus.` });
           c.categoryIds = next;
+        }
+        if (typeof body.teamId === 'string' && body.teamId !== c.teamId) {
+          const err = teamError(body.teamId, c.id);
+          if (err) return send(res, 409, { error: err });
+          c.teamId = body.teamId;
         }
         if (typeof body.name === 'string') c.name = body.name.trim();
         save();
@@ -600,6 +683,11 @@ const server = http.createServer(async (req, res) => {
           lines.push([g.name.toUpperCase()]);
           lines.push(['Posizione', 'Numero', 'Concorrente', 'Voti', 'Totale', ...g.criteria.map((c) => c.label + ' (media)')]);
           for (const r of g.rows) lines.push([r.position, r.number, r.name, r.votes, r.total, ...g.criteria.map((c) => r.perCriterion[c.id] ?? '')]);
+        }
+        const tr = teamRanking();
+        if (tr.length) {
+          lines.push([], ['CLASSIFICA A SQUADRE'], ['Posizione', 'Team', 'Totale', 'Concorrenti']);
+          for (const t of tr) lines.push([t.position, t.name, t.total, t.members.map((x) => `#${x.number}${x.name ? ' ' + x.name : ''} (${x.total})`).join(', ')]);
         }
         const csv = lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
         return send(res, 200, '﻿' + csv, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="classifica.csv"' });

@@ -60,7 +60,9 @@ async function poll() {
   if (shown) return;
   shown = true;
   const res = await fetch('/api/results').then((r) => r.json());
-  cats = res.categories;
+  cats = res.categories.slice();
+  // Ultima scheda: classifica a squadre (somma dei totali dei concorrenti del team).
+  if (res.teams && res.teams.length) cats.push({ name: '👥 Squadre', rows: res.teams.map((t) => ({ position: t.position, name: t.name, number: '', votes: 0, total: t.total, team: true, members: t.members })) });
   document.getElementById('sub').textContent = 'Classifiche finali';
   showCat(0);
 }
@@ -76,7 +78,7 @@ function showCat(i) {
     <div class="cat">${esc(g.name)}</div>` +
     g.rows.map((r) => `<div class="row p${r.position}">
       <div class="pos">${r.position}°</div>
-      <div><div>${esc(r.name || 'Concorrente #' + r.number)}</div><div class="num">Pettorina #${esc(r.number)} · ${r.votes} voti</div></div>
+      <div><div>${esc(r.name || 'Concorrente #' + r.number)}</div><div class="num">${r.team ? r.members.map((m) => '#' + esc(m.number) + (m.name ? ' ' + esc(m.name) : '')).join(' · ') : `Pettorina #${esc(r.number)} · ${r.votes} voti`}</div></div>
       <div class="pts">${r.total}</div></div>`).join('') +
     `<div class="ctrl"><button id="next">Svela il prossimo</button><div class="hint">Premi spazio o il pulsante: si parte dall'ultimo posto.</div></div>`;
   document.getElementById('next').onclick = next;

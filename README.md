@@ -40,6 +40,11 @@ Le categorie e i criteri stanno in Regia → **Regolamento**, un testo semplice 
   Voti, bonus/malus e classifica sono separati per ogni gara.
 - Ogni giudice vede solo i criteri della gara che spettano al suo ruolo.
 
+## Team
+20 team precaricati (nomi modificabili in Regia → Impostazioni), **massimo 4 concorrenti ciascuno**, ogni concorrente in un solo team.
+In Regia → Concorrenti si sceglie il team da un menu: quelli già pieni non si possono selezionare.
+Dopo la rivelazione c'è anche la **classifica a squadre**: punteggio del team = somma dei totali dei suoi concorrenti in tutte le gare.
+
 ## Calcolo del punteggio
 - Una **classifica separata per ogni categoria**.
 - Totale concorrente = somma dei punti di tutti i giudici (gusto + forno, lista di controllo compresa) + eventuali bonus/malus.
