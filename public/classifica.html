@@ -10,6 +10,8 @@
   body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% 0%, #3a2420, #120c0b 70%); color: #fff;
          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
   .wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px; }
+  .logo { display: block; margin: 0 auto 14px; width: clamp(140px, 22vw, 240px); height: auto; filter: drop-shadow(0 8px 24px rgba(0,0,0,.55)); transition: width .6s ease; }
+  body.rev .logo { width: clamp(90px, 12vw, 140px); }
   h1 { text-align: center; font-size: clamp(1.6rem, 4vw, 3rem); margin: 0 0 6px; }
   .sub { text-align: center; color: #c8b9b0; margin-bottom: 40px; font-size: 1.1rem; }
   .sealed { text-align: center; margin-top: 12vh; }
@@ -34,6 +36,7 @@
 </head>
 <body>
 <div class="wrap">
+  <img class="logo" src="/logo.png" alt="Logo campionato">
   <h1 id="title">🍕</h1>
   <div class="sub" id="sub"></div>
   <div id="out"></div>
@@ -51,12 +54,14 @@ async function poll() {
   document.getElementById('title').textContent = '🍕 ' + info.name;
   if (info.eventStatus !== 'revealed') {
     shown = false;
+    document.body.classList.remove('rev');
     document.getElementById('sub').textContent = '';
     document.getElementById('out').innerHTML = `<div class="sealed"><div class="ico">${info.eventStatus === 'open' ? '🗳️' : '🔒'}</div>
       <h2>${info.eventStatus === 'open' ? 'Votazione in corso' : 'Votazione chiusa'}</h2>
       <div class="sub">I voti dei giudici sono segreti. La classifica verrà svelata a breve.</div></div>`;
     return;
   }
+  document.body.classList.add('rev');
   if (shown) return;
   shown = true;
   const res = await fetch('/api/results').then((r) => r.json());
