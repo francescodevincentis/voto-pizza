@@ -14,9 +14,16 @@
   .crit { margin-bottom: 18px; }
   .crit .lbl { display: flex; justify-content: space-between; font-weight: 600; margin-bottom: 8px; }
   .crit .val { color: var(--accent); font-size: 1.2rem; font-weight: 800; min-width: 2ch; text-align: right; }
-  .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-  .scale button { background: #fff; color: var(--ink); border: 1px solid var(--line); padding: 12px 0; font-size: 1.05rem; }
-  .scale button.sel { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .score { display: flex; gap: 10px; align-items: center; }
+  .score input[type=range] { flex: 1; accent-color: var(--accent); height: 34px; padding: 0; border: 0; }
+  .score input[type=number] { width: 78px; font-size: 1.2rem; font-weight: 700; text-align: center; padding: 8px 4px; }
+  .score input.unset { color: var(--muted); }
+  .score input[type=range].unset { accent-color: #c9c0b6; opacity: .6; }
+  .check { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .check button { background: #fff; color: var(--ink); border: 1px solid var(--line); padding: 12px 0; font-size: 1rem; }
+  .check button.sel.yes { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .check button.sel.no { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .sect { font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 6px 0 12px; }
   .sticky { position: sticky; bottom: 0; background: var(--bg); padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); }
   .sticky button { width: 100%; padding: 16px; font-size: 1.1rem; }
   .list a { display: flex; justify-content: space-between; align-items: center; padding: 12px 4px; border-bottom: 1px solid var(--line); color: var(--ink); text-decoration: none; }
@@ -62,7 +69,7 @@ async function main() {
     return;
   }
   document.getElementById('evName').textContent = me.event.name;
-  document.getElementById('who').textContent = me.name;
+  document.getElementById('who').textContent = `${me.name} · ${me.roleLabel}`;
 
   const code = location.pathname.startsWith('/v/') ? location.pathname.slice(3) : null;
   if (code) return voteScreen(code);
@@ -75,29 +82,40 @@ function homeScreen(me) {
     <div class="card">
       <h2>Ciao ${esc(me.name)} 👋</h2>
       <p>Per votare, <b>inquadra con la fotocamera il QR sulla pettorina</b> del concorrente.</p>
-      <p class="muted small">Hai votato ${done} concorrenti su ${me.competitors.length}.</p>
+      <p class="muted small">Sei <b>${esc(me.roleLabel.toLowerCase())}</b>. Hai dato ${done} voti su ${me.competitors.length} (chi è iscritto a più gare compare una volta per gara).</p>
       <div class="bar"><i style="width:${me.competitors.length ? (done / me.competitors.length) * 100 : 0}%"></i></div>
       ${me.event.status !== 'open' ? '<div class="msg err">La votazione è chiusa.</div>' : ''}
     </div>
     <div class="card list">
       <h2>Concorrenti</h2>
       <p class="muted small">In alternativa al QR puoi toccare il concorrente dall'elenco.</p>
-      ${me.competitors.map((c) => `<a href="/v/${c.code}">
-        <span><b>#${esc(c.number)}</b> ${esc(c.name)}</span>
+      ${me.competitors.map((c) => `<a href="/v/${c.code}?cat=${encodeURIComponent(c.categoryId)}">
+        <span><b>Concorrente #${esc(c.number)}</b> <span class="muted small">${esc(c.category)}</span></span>
         <span>${c.voted ? '<span class="pill open">Votato ✓</span>' : '<span class="muted">›</span>'}</span>
       </a>`).join('')}
     </div>`;
 }
 
 async function voteScreen(code) {
-  const d = await api('/api/judge/competitor/' + encodeURIComponent(code));
+  const cat = new URLSearchParams(location.search).get('cat');
+  const d = await api('/api/judge/competitor/' + encodeURIComponent(code) + (cat ? '?cat=' + encodeURIComponent(cat) : ''));
   if (d.status !== 200) {
     app.innerHTML = `<div class="msg err">${esc(d.error || 'Errore')}</div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
     return;
   }
-  const head = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div><div style="font-weight:600;margin-top:6px">${esc(d.competitor.name)}</div></div>`;
+  if (d.choose) {
+    // Concorrente iscritto a più gare: il giudice sceglie quale sta assaggiando.
+    app.innerHTML = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div></div>
+      <div class="card list"><h2>Quale gara stai votando?</h2>
+      <p class="muted small">Questo concorrente è iscritto a più gare.</p>
+      ${d.choose.map((k) => `<a href="/v/${d.competitor.code}?cat=${encodeURIComponent(k.id)}"><span><b>${esc(k.name)}</b></span>
+        <span>${k.voted ? '<span class="pill open">Votato ✓</span>' : '<span class="muted">›</span>'}</span></a>`).join('')}
+      </div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
+    return;
+  }
+  const head = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div><div style="margin-top:6px;font-weight:600">${esc(d.competitor.category)}</div></div>`;
   if (d.voted) {
-    app.innerHTML = head + `<div class="card" style="text-align:center"><div class="done-ico">🔒</div><h2>Hai già votato questo concorrente</h2><p class="muted">Il tuo voto è registrato e segreto.</p></div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
+    app.innerHTML = head + `<div class="card" style="text-align:center"><div class="done-ico">🔒</div><h2>Hai già votato questo concorrente in questa gara</h2><p class="muted">Il tuo voto è registrato e segreto.</p></div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
     return;
   }
   render(d, head);
@@ -109,36 +127,70 @@ function render(d, head) {
     return;
   }
   const scores = {};
-  const values = [];
-  for (let v = d.scaleMin; v <= d.scaleMax; v++) values.push(v);
+  const scoreCrit = d.criteria.filter((c) => c.type !== 'check');
+  const checkCrit = d.criteria.filter((c) => c.type === 'check' || c.type === 'penalty');
+  const pts = (c, yes) => c.type === 'penalty' ? (yes ? '0' : `−${P}`) : (yes ? `+${P}` : `−${P}`);
+  const mid = Math.round((d.scaleMin + d.scaleMax) / 2);
+  const P = d.checkPoints;
   app.innerHTML = head + `
-    <div class="card">
-      ${d.criteria.map((c) => `<div class="crit" data-id="${c.id}">
-        <div class="lbl"><span>${esc(c.label)}</span><span class="val">–</span></div>
-        <div class="scale">${values.map((v) => `<button type="button" data-v="${v}">${v}</button>`).join('')}</div>
+    ${scoreCrit.length ? `<div class="card">
+      <div class="sect">Voto da ${d.scaleMin} a ${d.scaleMax}</div>
+      ${scoreCrit.map((c) => `<div class="crit" data-id="${c.id}" data-type="score">
+        <div class="lbl"><span>${esc(c.label)}</span></div>
+        <div class="score">
+          <input type="range" class="unset" min="${d.scaleMin}" max="${d.scaleMax}" step="1" value="${mid}" aria-label="${esc(c.label)}">
+          <input type="number" inputmode="numeric" min="${d.scaleMin}" max="${d.scaleMax}" placeholder="–" class="unset">
+        </div>
       </div>`).join('')}
-      <p class="muted small">🔒 Il voto è segreto: nessuno, nemmeno gli organizzatori, vede i punteggi prima della chiusura.</p>
-    </div>
-    <div class="sticky"><button class="primary" id="send" disabled>Seleziona tutti i criteri</button></div>
+    </div>` : ''}
+    ${checkCrit.length ? `<div class="card">
+      <div class="sect">Lista di controllo · rispettato / non rispettato</div>
+      ${checkCrit.map((c) => `<div class="crit" data-id="${c.id}" data-type="check">
+        <div class="lbl"><span>${esc(c.label)}</span><span class="val">–</span></div>
+        <div class="check">${c.type === 'penalty' ? `<button type="button" class="yes" data-v="1">✓ Tutto ok (0)</button><button type="button" class="no" data-v="0">⚠ Penalità (−${P})</button>` : (/monili|gioielli|listelli/i.test(c.label) ? `<button type="button" class="yes" data-v="1">✓ Tutto ok (+${P})</button><button type="button" class="no" data-v="0">⚠ Penalità (−${P})</button>` : `<button type="button" class="yes" data-v="1">✓ Sì (+${P})</button><button type="button" class="no" data-v="0">✗ No (−${P})</button>`)}</div>
+      </div>`).join('')}
+    </div>` : ''}
+    <p class="muted small">🔒 Il voto è segreto: nessuno, nemmeno gli organizzatori, vede i punteggi prima della chiusura.</p>
+    <div class="sticky"><button class="primary" id="send" disabled>Compila tutti i criteri</button></div>
     <div id="err"></div>`;
 
   const sendBtn = document.getElementById('send');
-  app.querySelectorAll('.crit').forEach((el) => {
+  const refresh = () => {
+    const left = d.criteria.filter((c) => !(c.id in scores)).length;
+    sendBtn.disabled = left > 0;
+    sendBtn.textContent = left > 0 ? `Mancano ${left} ${left === 1 ? 'criterio' : 'criteri'}` : 'Invia voto';
+  };
+  app.querySelectorAll('.crit[data-type=score]').forEach((el) => {
+    const range = el.querySelector('input[type=range]');
+    const num = el.querySelector('input[type=number]');
+    const set = (v, fromNum) => {
+      const n = Number(v);
+      if (v === '' || !Number.isInteger(n) || n < d.scaleMin || n > d.scaleMax) { delete scores[el.dataset.id]; num.classList.add('unset'); range.classList.add('unset'); refresh(); return; }
+      scores[el.dataset.id] = n;
+      num.classList.remove('unset');
+      range.classList.remove('unset');
+      if (fromNum) range.value = n; else num.value = n;
+      refresh();
+    };
+    range.addEventListener('input', () => set(range.value, false));
+    num.addEventListener('input', () => set(num.value, true));
+  });
+  app.querySelectorAll('.crit[data-type=check]').forEach((el) => {
     el.addEventListener('click', (e) => {
       const b = e.target.closest('button[data-v]');
       if (!b) return;
       el.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x === b));
-      scores[el.dataset.id] = Number(b.dataset.v);
-      el.querySelector('.val').textContent = b.dataset.v;
-      const left = d.criteria.length - Object.keys(scores).length;
-      sendBtn.disabled = left > 0;
-      sendBtn.textContent = left > 0 ? `Mancano ${left} criteri` : 'Invia voto';
+      scores[el.dataset.id] = b.dataset.v === '1';
+      const cr = d.criteria.find((x) => x.id === el.dataset.id);
+      el.querySelector('.val').textContent = pts(cr, b.dataset.v === '1');
+      refresh();
     });
   });
 
+  const show = (c) => c.type === 'score' ? scores[c.id] : c.type === 'penalty' ? (scores[c.id] ? 'ok (0)' : `penalità −${P}`) : (scores[c.id] ? '✓ ' : '✗ ') + pts(c, scores[c.id]);
   const dlg = document.getElementById('confirm');
   sendBtn.onclick = () => {
-    document.getElementById('recap').innerHTML = d.criteria.map((c) => `${esc(c.label)}: <b>${scores[c.id]}</b>`).join('<br>');
+    document.getElementById('recap').innerHTML = d.criteria.map((c) => `${esc(c.label)}: <b>${show(c)}</b>`).join('<br>');
     dlg.showModal();
   };
   document.getElementById('cancel').onclick = () => dlg.close();
@@ -146,7 +198,7 @@ function render(d, head) {
     dlg.close();
     const r = await api('/api/judge/vote', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: d.competitor.code, scores }),
+      body: JSON.stringify({ code: d.competitor.code, categoryId: d.competitor.categoryId, scores }),
     });
     if (r.status !== 200) {
       document.getElementById('err').innerHTML = `<div class="msg err">${esc(r.error || 'Errore')}</div>`;

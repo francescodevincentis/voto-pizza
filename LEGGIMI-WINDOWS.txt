@@ -1,0 +1,18 @@
+VOTO PIZZA SU WINDOWS
+=====================
+
+1. Installa Node.js (versione LTS) da https://nodejs.org, se non c'e' gia'.
+2. Copia tutta la cartella "voto-pizza" sul PC (es. sul Desktop), con chiavetta o cloud.
+   Il file data.json contiene concorrenti, giudici e voti: copialo insieme alla cartella.
+3. Collega il PC alla Wi-Fi della gara.
+4. Doppio clic su avvia.bat.
+   - Si apre una finestra nera (non chiuderla: e' l'app) e poi la regia nel browser.
+   - La prima volta Windows chiede se consentire Node.js in rete: scegli "Consenti"
+     sulle reti private. Senza questo i telefoni non si collegano.
+   - Se la rete della gara risulta "Pubblica", in Impostazioni > Rete e Internet > Wi-Fi
+     impostala come "Privata".
+5. Stampa i QR da /stampa DOPO esserti collegato alla Wi-Fi della gara
+   (l'indirizzo nei QR e' quello del PC su quella rete).
+
+Per fermare l'app chiudi la finestra nera. Per riavviarla, doppio clic su avvia.bat.
+Sul PC che fa girare l'app la regia non chiede password; da altri dispositivi si'.
