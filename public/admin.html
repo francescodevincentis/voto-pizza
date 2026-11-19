@@ -278,9 +278,10 @@ function render() {
   const noCat = S.competitors.filter((c) => !c.categoryIds.length);
   $('matrix').innerHTML = `<tr><th>Concorrente</th><th>Gara</th>${S.judges.map((j) => `<th class="j">${esc(j.name)}</th>`).join('')}<th>Voti</th></tr>` +
     noCat.map((c) => `<tr><td>#${esc(c.number)} ${esc(c.name)}</td><td class="small" style="color:var(--accent)">manca la gara</td>${S.judges.map(() => '<td class="c na"></td>').join('')}<td></td></tr>`).join('') +
-    S.entries.map((c) => `<tr><td>#${esc(c.number)} ${esc(c.name)}</td><td class="small">${esc(c.category)}</td>${S.judges.map((j) => c.judgesExpected.includes(j.id)
+    (S.entries.length && !('votesTotal' in S.entries[0]) ? `<tr><td colspan="${S.judges.length + 3}" class="small" style="color:var(--accent);font-weight:700">⚠ Il programma in esecuzione è la versione vecchia: chiudi il Terminale e rilancia avvia.command per vedere i totali.</td></tr>` : '') +
+  S.entries.map((c) => { if (c.override === undefined) c.override = null; return c; }).map((c) => `<tr><td>#${esc(c.number)} ${esc(c.name)}</td><td class="small">${esc(c.category)}</td>${S.judges.map((j) => c.judgesExpected.includes(j.id)
       ? `<td class="c"><span class="dot ${c.judgesVoted.includes(j.id) ? 'on' : ''}" style="display:inline-block"></span></td>`
-      : '<td class="c na" title="Non vota questa categoria"></td>').join('')}<td style="white-space:nowrap"><input class="tot ${c.override !== null ? 'man' : ''}" type="number" step="any" value="${c.override !== null ? c.override : c.votesTotal}" data-ov="${c.competitorId}" data-cat="${esc(c.categoryId)}" title="${c.override !== null ? `Modificato a mano (calcolato: ${c.votesTotal})` : 'Totale calcolato'}">
+      : '<td class="c na" title="Non vota questa categoria"></td>').join('')}<td style="white-space:nowrap"><input class="tot ${c.override !== null ? 'man' : ''}" type="number" step="any" value="${c.override !== null ? c.override : (c.votesTotal ?? '')}" data-ov="${c.competitorId}" data-cat="${esc(c.categoryId)}" title="${c.override !== null ? `Modificato a mano (calcolato: ${c.votesTotal})` : 'Totale calcolato'}">
         ${c.override !== null ? `<button class="ghost small" data-ov-reset="${c.competitorId}" data-cat="${esc(c.categoryId)}" title="Torna al totale calcolato (${c.votesTotal})">↺</button>` : ''}
         <div class="muted small">${c.judgesVoted.length}/${c.judgesExpected.length} giudici${c.override !== null ? ' · modificato' : ''}</div></td></tr>`).join('');
 
