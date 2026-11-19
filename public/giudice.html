@@ -147,7 +147,7 @@ function render(d, head) {
       <div class="sect">Lista di controllo · rispettato / non rispettato</div>
       ${checkCrit.map((c) => `<div class="crit" data-id="${c.id}" data-type="check">
         <div class="lbl"><span>${esc(c.label)}</span><span class="val">–</span></div>
-        <div class="check">${c.type === 'penalty' ? `<button type="button" class="yes" data-v="1">✓ Tutto ok (0)</button><button type="button" class="no" data-v="0">⚠ Penalità (−${P})</button>` : `<button type="button" class="yes" data-v="1">✓ Sì (+${P})</button><button type="button" class="no" data-v="0">✗ No (−${P})</button>`}</div>
+        <div class="check">${c.type === 'penalty' ? `<button type="button" class="yes" data-v="1">✓ Tutto ok (0)</button><button type="button" class="no" data-v="0">⚠ Penalità (−${P})</button>` : (/monili|gioielli|listelli/i.test(c.label) ? `<button type="button" class="yes" data-v="1">✓ Tutto ok (+${P})</button><button type="button" class="no" data-v="0">⚠ Penalità (−${P})</button>` : `<button type="button" class="yes" data-v="1">✓ Sì (+${P})</button><button type="button" class="no" data-v="0">✗ No (−${P})</button>`)}</div>
       </div>`).join('')}
     </div>` : ''}
     <p class="muted small">🔒 Il voto è segreto: nessuno, nemmeno gli organizzatori, vede i punteggi prima della chiusura.</p>

@@ -23,9 +23,9 @@ const DEFAULT_RULES = [
     .map((n) => `# ${n}\n${STANDARD}`),
   `# Napoletana
 forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | Mozzarella 80/100 gr
-forno -5: Mozzarella tagliata a listelli
+forno ±5: Mozzarella tagliata a listelli
 forno ±5: Sale sul pomodoro | Basilico in cottura | Oliera | Cottura 90 secondi | Stesura con schiaffo | Infornata con rotatoria senza fuoriuscita | Panetto 180/250 gr | Bordo da 1 a 2 cm (oltre: penalità) | Straccio per pulire la pizza | La pizza non deve superare 35 cm ø
-forno -5: Monili e gioielli`,
+forno ±5: Monili e gioielli`,
   `# Ruota di carro
 forno: Etica professionale | Pulizia
 forno -5: Diametro inferiore a 35 cm ø`,
@@ -123,6 +123,12 @@ if (typeof state.event.rules === 'string' && state.event.rules.includes('forno �
     .replace('Mozzarella 80/100 gr | Mozzarella tagliata a listelli | ', 'Mozzarella 80/100 gr\nforno -5: Mozzarella tagliata a listelli\nforno ±5: ')
     .replace('La pizza non deve superare 35 cm ø', 'La pizza non deve superare 35 cm ø\nforno -5: Monili e gioielli')
     .replace('forno ±5: Diametro 35–40 cm ø', 'forno -5: Diametro inferiore a 35 cm ø');
+  state.event.categories = parseRules(state.event.rules).categories;
+  save();
+}
+// Napoletana: "Monili e gioielli" e "Mozzarella tagliata a listelli" passano da sola penalità a ±5 (Tutto ok +5, Penalità −5). Stesso id, i voti restano validi.
+if (typeof state.event.rules === 'string' && /forno -5: (Monili e gioielli|Mozzarella tagliata a listelli)/.test(state.event.rules)) {
+  state.event.rules = state.event.rules.replace('forno -5: Monili e gioielli', 'forno ±5: Monili e gioielli').replace('forno -5: Mozzarella tagliata a listelli', 'forno ±5: Mozzarella tagliata a listelli');
   state.event.categories = parseRules(state.event.rules).categories;
   save();
 }
