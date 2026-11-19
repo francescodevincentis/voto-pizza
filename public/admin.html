@@ -15,7 +15,11 @@
   #intro .skip { position: absolute; bottom: 22px; font-size: .8rem; color: #a08f80; animation: introText 1s ease 2s both; }
   @keyframes introLogo { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
   @keyframes introText { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-  header.bar-top { background: var(--ink); color: #fff; }
+  header.bar-top { background: linear-gradient(100deg, #1f1a17 0%, #3a2420 60%, #6b2a1f 100%); color: #fff; border-bottom: 4px solid; border-image: linear-gradient(90deg, #2f8f4e 0 33%, #fff 33% 66%, #c8402b 66%) 1; }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .brand img { width: 100px; height: 100px; border-radius: 16px; background: #fff; padding: 4px; object-fit: contain; box-shadow: 0 4px 14px rgba(0,0,0,.35); flex: none; }
+  .brand .by { font-size: .78rem; color: #e6b84a; margin-top: 2px; letter-spacing: .02em; }
+  @media (max-width: 600px) { .brand img { width: 60px; height: 60px; } }
   header.bar-top .wrap { padding-bottom: 20px; }
   header.bar-top .muted { color: #cfc6bd; }
   .big { font-size: 2rem; font-weight: 800; }
@@ -67,9 +71,13 @@
   <header class="bar-top">
     <div class="wrap">
       <div class="row" style="justify-content:space-between">
-        <div>
-          <div class="muted small">REGIA</div>
-          <h1 id="evName" style="margin:0"></h1>
+        <div class="brand">
+          <img src="/logo.jpg" alt="3° Campionato Mondiale di Pizza Contemporanea">
+          <div>
+            <div class="muted small">REGIA · 3° CAMPIONATO MONDIALE DI PIZZA CONTEMPORANEA</div>
+            <h1 id="evName" style="margin:0"></h1>
+            <div class="by">Ideato e prodotto da Francesco De Vincentis · IAM PASSION</div>
+          </div>
         </div>
         <div class="row">
           <span id="statusPill" class="pill"></span>
