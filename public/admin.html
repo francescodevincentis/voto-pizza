@@ -18,6 +18,8 @@
   header.bar-top { background: linear-gradient(100deg, #1f1a17 0%, #3a2420 60%, #6b2a1f 100%); color: #fff; border-bottom: 4px solid; border-image: linear-gradient(90deg, #2f8f4e 0 33%, #fff 33% 66%, #c8402b 66%) 1; }
   .brand { display: flex; align-items: center; gap: 16px; }
   .brand img { width: 100px; height: 100px; border-radius: 16px; background: #fff; padding: 4px; object-fit: contain; box-shadow: 0 4px 14px rgba(0,0,0,.35); flex: none; }
+  #intro a.iam { color: #c8402b; font-weight: 700; text-decoration: none; border-bottom: 2px solid currentColor; }
+  .brand .by a.iam { color: #e6b84a; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
   .brand .by { font-size: .78rem; color: #e6b84a; margin-top: 2px; letter-spacing: .02em; }
   @media (max-width: 600px) { .brand img { width: 60px; height: 60px; } }
   header.bar-top .wrap { padding-bottom: 20px; }
@@ -43,7 +45,7 @@
 <!-- Intro all'apertura della regia: logo del campionato e crediti, poi la dashboard. -->
 <div id="intro" onclick="closeIntro()">
   <img src="/logo.jpg" alt="3° Campionato Mondiale di Pizza Contemporanea">
-  <div class="credit">Ideato e prodotto da<br><b>Francesco De Vincentis</b> · IAM PASSION</div>
+  <div class="credit">Ideato e prodotto da<br><b>Francesco De Vincentis</b> · <a class="iam" href="https://www.workinprogressiam.it" target="_blank" rel="noopener" onclick="event.stopPropagation()">IAM PASSION</a></div>
   <div class="skip">tocca per entrare</div>
 </div>
 <script>
@@ -76,7 +78,7 @@
           <div>
             <div class="muted small">REGIA · 3° CAMPIONATO MONDIALE DI PIZZA CONTEMPORANEA</div>
             <h1 id="evName" style="margin:0"></h1>
-            <div class="by">Ideato e prodotto da Francesco De Vincentis · IAM PASSION</div>
+            <div class="by">Ideato e prodotto da Francesco De Vincentis · <a class="iam" href="https://www.workinprogressiam.it" target="_blank" rel="noopener">IAM PASSION</a></div>
           </div>
         </div>
         <div class="row">
