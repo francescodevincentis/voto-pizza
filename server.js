@@ -17,7 +17,7 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 //   gusto: Criterio | Criterio | ...      -> voto da scaleMin a scaleMax (es. 1–100)
 //   forno ±5: Voce | Voce | ...           -> spunta: rispettata +5, non rispettata −5
 //   forno -5: Voce | ...                   -> solo penalità: rispettata 0, non rispettata −5
-const STANDARD = 'gusto: Gusto | Cottura | Presentazione\nforno: Etica professionale e pulizia';
+const STANDARD = 'gusto: Gusto | Cottura | Presentazione\nforno: Etica professionale | Pulizia';
 const DEFAULT_RULES = [
   ...['Classica', 'Gourmet', 'Contemporanea', 'Chef', 'Senza Glutine', 'In pala', 'Amatoriale', 'Genio e follia']
     .map((n) => `# ${n}\n${STANDARD}`),
@@ -123,6 +123,12 @@ if (typeof state.event.rules === 'string' && state.event.rules.includes('forno �
     .replace('Mozzarella 80/100 gr | Mozzarella tagliata a listelli | ', 'Mozzarella 80/100 gr\nforno -5: Mozzarella tagliata a listelli\nforno ±5: ')
     .replace('La pizza non deve superare 35 cm ø', 'La pizza non deve superare 35 cm ø\nforno -5: Monili e gioielli')
     .replace('forno ±5: Diametro 35–40 cm ø', 'forno -5: Diametro inferiore a 35 cm ø');
+  state.event.categories = parseRules(state.event.rules).categories;
+  save();
+}
+// Etica professionale e Pulizia diventano due voti separati (stesso ordine: Etica resta k4, Pulizia è il nuovo k5).
+if (typeof state.event.rules === 'string' && /forno:\s*Etica professionale e pulizia/i.test(state.event.rules)) {
+  state.event.rules = state.event.rules.replace(/forno:\s*Etica professionale e pulizia/gi, 'forno: Etica professionale | Pulizia');
   state.event.categories = parseRules(state.event.rules).categories;
   save();
 }

@@ -28,7 +28,7 @@ Le categorie e i criteri stanno in Regia → **Regolamento**, un testo semplice 
 
     # Classica
     gusto: Gusto | Cottura | Presentazione
-    forno: Etica professionale e pulizia
+    forno: Etica professionale | Pulizia
 
     # Napoletana
     forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | ...
