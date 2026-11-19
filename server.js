@@ -88,6 +88,7 @@ function defaultState() {
       scaleMin: 1,
       scaleMax: 100,
       checkPoints: 5,
+      weighted: true, // voto ponderato: scarta il voto più alto e il più basso per criterio (con almeno 3 giudici)
       teamSize: 4, // massimo concorrenti per team
       teams: defaultTeams(),
       teamExcluded: ['chef', 'genio-e-follia', 'napoletana', 'amatoriale'], // gare che non contano per la squadra
@@ -113,6 +114,7 @@ try {
 
 if (!Array.isArray(state.adjustments)) state.adjustments = [];
 if (!Array.isArray(state.overrides)) state.overrides = [];
+if (typeof state.event.weighted !== 'boolean') state.event.weighted = true;
 // Regolamento predefinito della versione precedente: "Mozzarella tagliata a listelli", "Monili e gioielli"
 // e il diametro della Ruota di carro diventano sole penalità (−5). Le voci restano nello stesso ordine,
 // così i voti già dati non cambiano significato.
@@ -220,6 +222,28 @@ function points(cr, v) {
   return cr.type === 'check' ? (v ? state.event.checkPoints : -state.event.checkPoints) : Number(v) || 0;
 }
 const r2 = (n) => Math.round(n * 100) / 100;
+// Punteggio di un concorrente in una gara.
+// Voto ponderato (event.weighted): per ogni criterio, se i giudici che l'hanno votato sono almeno 3, si scartano
+// il voto più alto e il più basso e si fa la media dei rimanenti; con 1–2 giudici media semplice.
+// Totale = somma delle medie dei criteri (gusto + forno). Senza ponderazione: somma dei punti di tutti i giudici.
+function scoreOf(competitorId, catId) {
+  const cat = catById(catId);
+  const vs = state.votes.filter((v) => v.competitorId === competitorId && v.categoryId === catId);
+  const byRole = { gusto: 0, forno: 0 };
+  const perCriterion = {};
+  if (!state.event.weighted) {
+    for (const v of vs) byRole[v.role] = (byRole[v.role] || 0) + v.total;
+  }
+  for (const cr of cat ? cat.criteria : []) {
+    let vals = vs.filter((v) => cr.id in v.scores).map((v) => points(cr, v.scores[cr.id])).sort((a, b) => a - b);
+    if (!vals.length) { perCriterion[cr.id] = null; continue; }
+    if (state.event.weighted && vals.length >= 3) vals = vals.slice(1, -1);
+    const mean = vals.reduce((a, x) => a + x, 0) / vals.length;
+    perCriterion[cr.id] = r2(mean);
+    if (state.event.weighted) byRole[cr.role] += mean;
+  }
+  return { vs, byRole, perCriterion, total: r2(byRole.gusto + byRole.forno) };
+}
 const overrideOf = (competitorId, categoryId) => state.overrides.find((o) => o.competitorId === competitorId && o.categoryId === categoryId);
 
 // Classifica separata per categoria. Totale = somma dei punti di tutti i giudici + bonus/malus.
@@ -234,17 +258,10 @@ function ranking() {
   }
   for (const [c, catId] of entries) {
     const g = groups.find((x) => x.id === catId) || orphan;
-    const vs = state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId);
+    const { vs, byRole, perCriterion, total: computed } = scoreOf(c.id, catId);
     const ov = overrideOf(c.id, catId);
-    const votesTotal = ov ? ov.total : vs.reduce((a, v) => a + v.total, 0);
-    const byRole = { gusto: 0, forno: 0 };
-    for (const v of vs) byRole[v.role] = (byRole[v.role] || 0) + v.total;
+    const votesTotal = ov ? ov.total : computed;
     const bonus = state.adjustments.filter((a) => a.competitorId === c.id && a.categoryId === catId).reduce((a, x) => a + x.delta, 0);
-    const perCriterion = {};
-    for (const cr of g.criteria) {
-      const given = vs.filter((v) => cr.id in v.scores);
-      perCriterion[cr.id] = given.length ? r2(given.reduce((a, v) => a + points(cr, v.scores[cr.id]), 0) / given.length) : null;
-    }
     g.rows.push({
       number: c.number,
       name: c.name,
@@ -547,7 +564,7 @@ const server = http.createServer(async (req, res) => {
           judgesVoted: state.judges.filter((j) => hasVoted(j, c, id)).map((j) => j.id),
           bonus: state.adjustments.filter((a) => a.competitorId === c.id && a.categoryId === id).reduce((a, x) => a + x.delta, 0),
           // Totale dei voti dei giudici (senza bonus/malus) e l'eventuale correzione manuale.
-          votesTotal: r2(state.votes.filter((v) => v.competitorId === c.id && v.categoryId === id).reduce((a, v) => a + v.total, 0)),
+          votesTotal: scoreOf(c.id, id).total,
           override: overrideOf(c.id, id) ? overrideOf(c.id, id).total : null,
         })));
         const expectedVotes = entries.reduce((a, e) => a + e.judgesExpected.length, 0);
@@ -576,6 +593,7 @@ const server = http.createServer(async (req, res) => {
           if (used.length) return send(res, 409, { error: `${used[0].name} ha concorrenti: non si può togliere.` });
           ev.teams = names.map((name, i) => ({ id: (ev.teams[i] || {}).id || 't' + token(4), name }));
         }
+        if (typeof body.weighted === 'boolean') ev.weighted = body.weighted;
         if (Array.isArray(body.teamExcluded)) ev.teamExcluded = body.teamExcluded.map(String);
         if (body.teamSize != null) {
           const n = Number(body.teamSize);
