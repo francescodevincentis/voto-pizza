@@ -6,6 +6,15 @@
 <title>Regia votazione</title>
 <link rel="stylesheet" href="/style.css">
 <style>
+  #intro { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+           background: radial-gradient(circle at 50% 42%, #fff 0%, #fff 38%, #f6ead6 80%, #efdcbf 100%); cursor: pointer; transition: opacity .9s ease; padding: 16px; }
+  #intro.out { opacity: 0; pointer-events: none; }
+  #intro img { width: min(420px, 78vw); height: auto; animation: introLogo 1.6s cubic-bezier(.2,.8,.2,1) both; mix-blend-mode: multiply; }
+  #intro .credit { text-align: center; font-size: 1.05rem; color: #5b4a3c; letter-spacing: .02em; animation: introText 1s ease 1s both; }
+  #intro .credit b { font-size: 1.35rem; color: #1f1a17; }
+  #intro .skip { position: absolute; bottom: 22px; font-size: .8rem; color: #a08f80; animation: introText 1s ease 2s both; }
+  @keyframes introLogo { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
+  @keyframes introText { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
   header.bar-top { background: var(--ink); color: #fff; }
   header.bar-top .wrap { padding-bottom: 20px; }
   header.bar-top .muted { color: #cfc6bd; }
@@ -27,6 +36,20 @@
 </style>
 </head>
 <body>
+<!-- Intro all'apertura della regia: logo del campionato e crediti, poi la dashboard. -->
+<div id="intro" onclick="closeIntro()">
+  <img src="/logo.jpg" alt="3° Campionato Mondiale di Pizza Contemporanea">
+  <div class="credit">Ideato e prodotto da<br><b>Francesco De Vincentis</b> · IAM PASSION</div>
+  <div class="skip">tocca per entrare</div>
+</div>
+<script>
+  function closeIntro() { const el = document.getElementById('intro'); if (!el || el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 900); }
+  (function () {
+    let seen = false;
+    try { seen = sessionStorage.getItem('introSeen') === '1'; sessionStorage.setItem('introSeen', '1'); } catch (e) {}
+    if (seen) document.getElementById('intro').remove(); else setTimeout(closeIntro, 4200);
+  })();
+</script>
 
 <section id="login" class="wrap narrow hidden">
   <div class="card" style="margin-top:40px">
