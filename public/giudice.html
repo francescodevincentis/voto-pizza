@@ -127,7 +127,7 @@ function render(d, head) {
     return;
   }
   const scores = {};
-  const scoreCrit = d.criteria.filter((c) => c.type !== 'check');
+  const scoreCrit = d.criteria.filter((c) => c.type !== 'check' && c.type !== 'penalty');
   const checkCrit = d.criteria.filter((c) => c.type === 'check' || c.type === 'penalty');
   const pts = (c, yes) => c.type === 'penalty' ? (yes ? '0' : `−${P}`) : (yes ? `+${P}` : `−${P}`);
   const mid = Math.round((d.scaleMin + d.scaleMax) / 2);

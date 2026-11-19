@@ -25,7 +25,8 @@ const DEFAULT_RULES = [
 forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | Mozzarella 80/100 gr
 forno ±5: Mozzarella tagliata a listelli
 forno ±5: Sale sul pomodoro | Basilico in cottura | Oliera | Cottura 90 secondi | Stesura con schiaffo | Infornata con rotatoria senza fuoriuscita | Panetto 180/250 gr | Bordo da 1 a 2 cm (oltre: penalità) | Straccio per pulire la pizza | La pizza non deve superare 35 cm ø
-forno ±5: Monili e gioielli`,
+forno ±5: Monili e gioielli
+gusto: Gusto | Cottura | Presentazione`,
   `# Ruota di carro
 forno: Etica professionale | Pulizia
 forno -5: Diametro inferiore a 35 cm ø`,
@@ -131,6 +132,18 @@ if (typeof state.event.rules === 'string' && /forno -5: (Monili e gioielli|Mozza
   state.event.rules = state.event.rules.replace('forno -5: Monili e gioielli', 'forno ±5: Monili e gioielli').replace('forno -5: Mozzarella tagliata a listelli', 'forno ±5: Mozzarella tagliata a listelli');
   state.event.categories = parseRules(state.event.rules).categories;
   save();
+}
+// Napoletana: votano anche i giudici di gusto (Gusto, Cottura, Presentazione). La riga va in fondo alla categoria,
+// così gli id dei criteri di forno non cambiano e i voti già dati restano validi.
+if (typeof state.event.rules === 'string') {
+  const blocks = state.event.rules.split(/\n(?=#)/);
+  const i = blocks.findIndex((b) => /^#\s*Napoletana\s*$/im.test(b.split('\n')[0]));
+  if (i >= 0 && !/^gusto\s*:/im.test(blocks[i])) {
+    blocks[i] = blocks[i].replace(/\s*$/, '') + '\ngusto: Gusto | Cottura | Presentazione' + (i < blocks.length - 1 ? '\n' : '');
+    state.event.rules = blocks.join('\n');
+    state.event.categories = parseRules(state.event.rules).categories;
+    save();
+  }
 }
 // Etica professionale e Pulizia diventano due voti separati (stesso ordine: Etica resta k4, Pulizia è il nuovo k5).
 if (typeof state.event.rules === 'string' && /forno:\s*Etica professionale e pulizia/i.test(state.event.rules)) {
