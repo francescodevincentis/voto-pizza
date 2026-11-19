@@ -35,6 +35,8 @@
   .tag-role.gusto { background: #fcefd9; color: var(--warn); }
   .tag-role.forno { background: #fbe3df; color: var(--accent); }
   .matrix td.na { background: #faf7f3; }
+  .matrix input.tot { width: 90px; padding: 4px 6px; font-size: .95rem; font-weight: 700; }
+  .matrix input.tot.man { border-color: var(--accent); color: var(--accent); }
   h3.cat { margin: 18px 0 6px; }
   .gara { display: inline-flex; align-items: center; gap: 4px; background: #f1ebe4; border-radius: 99px; padding: 2px 4px 2px 10px; margin: 2px 4px 2px 0; font-size: .82rem; white-space: nowrap; }
   .gara:not(:has(.x)) { padding-right: 10px; }
@@ -118,7 +120,7 @@
 
     <div class="card">
       <h2>Avanzamento per concorrente</h2>
-      <p class="muted small">Vedi solo <b>chi ha votato</b>, mai il punteggio: i voti restano segreti fino alla rivelazione.</p>
+      <p class="muted small">Pallini = chi ha votato. <b>Voti</b> = totale dei punti dei giudici in quella gara (bonus/malus escluso): puoi correggerlo a mano scrivendo il nuovo valore e premendo Invio. ↺ torna al totale calcolato.</p>
       <div style="overflow-x:auto"><table class="matrix" id="matrix"></table></div>
     </div>
 
@@ -278,7 +280,9 @@ function render() {
     noCat.map((c) => `<tr><td>#${esc(c.number)} ${esc(c.name)}</td><td class="small" style="color:var(--accent)">manca la gara</td>${S.judges.map(() => '<td class="c na"></td>').join('')}<td></td></tr>`).join('') +
     S.entries.map((c) => `<tr><td>#${esc(c.number)} ${esc(c.name)}</td><td class="small">${esc(c.category)}</td>${S.judges.map((j) => c.judgesExpected.includes(j.id)
       ? `<td class="c"><span class="dot ${c.judgesVoted.includes(j.id) ? 'on' : ''}" style="display:inline-block"></span></td>`
-      : '<td class="c na" title="Non vota questa categoria"></td>').join('')}<td>${c.judgesVoted.length}/${c.judgesExpected.length}</td></tr>`).join('');
+      : '<td class="c na" title="Non vota questa categoria"></td>').join('')}<td style="white-space:nowrap"><input class="tot ${c.override !== null ? 'man' : ''}" type="number" step="any" value="${c.override !== null ? c.override : c.votesTotal}" data-ov="${c.competitorId}" data-cat="${esc(c.categoryId)}" title="${c.override !== null ? `Modificato a mano (calcolato: ${c.votesTotal})` : 'Totale calcolato'}">
+        ${c.override !== null ? `<button class="ghost small" data-ov-reset="${c.competitorId}" data-cat="${esc(c.categoryId)}" title="Torna al totale calcolato (${c.votesTotal})">↺</button>` : ''}
+        <div class="muted small">${c.judgesVoted.length}/${c.judgesExpected.length} giudici${c.override !== null ? ' · modificato' : ''}</div></td></tr>`).join('');
 
   const teamCount = (id, except) => S.competitors.filter((c) => c.teamId === id && c.id !== except).length;
   // Team pieni non selezionabili (tranne quello attuale del concorrente).
@@ -334,6 +338,12 @@ $('importBtn').onclick = async () => {
 };
 $('addJudge').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/judge', { name: f.name.value, role: f.role.value }); f.name.value = ''; };
 document.addEventListener('change', (e) => {
+  const ov = e.target.dataset.ov;
+  if (ov) {
+    const v = e.target.value.trim();
+    if (v === '') return load();
+    act('/api/admin/override', { competitorId: ov, categoryId: e.target.dataset.cat, total: Number(v) }, 'Totale voti modificato');
+  }
   const tcat = e.target.dataset.teamcatComp;
   if (tcat) act('/api/admin/competitor/update', { id: tcat, teamCategoryId: e.target.value }, 'Gara per la squadra aggiornata');
   const tc = e.target.dataset.teamComp;
@@ -371,6 +381,8 @@ document.addEventListener('click', (e) => {
     act('/api/admin/adjust', { competitorId: adj, categoryId: e.target.dataset.cat, delta, note: $('adjNote').value }, `${fmtDelta(delta)} al #${c ? c.number : ''} (${catName(e.target.dataset.cat)})`);
     $('adjNote').value = '';
   }
+  const ovr = e.target.dataset.ovReset;
+  if (ovr && confirm('Tornare al totale calcolato dai voti dei giudici?')) act('/api/admin/override', { competitorId: ovr, categoryId: e.target.dataset.cat, total: null }, 'Totale ripristinato');
   const u = e.target.dataset.undo;
   if (u && confirm('Annullare questo bonus/malus?')) act('/api/admin/adjust/delete', { id: u }, 'Modifica annullata');
 });

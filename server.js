@@ -98,6 +98,7 @@ function defaultState() {
     judges: [], // { id, name, role: 'gusto'|'forno', token }
     votes: [], // { judgeId, competitorId, categoryId, role, scores: {criterio: numero | true/false}, total, at }
     adjustments: [], // { id, competitorId, categoryId, delta, note, at }  bonus/malus dell'organizzatore
+    overrides: [], // { competitorId, categoryId, total, at }  totale voti corretto a mano dalla regia
   };
 }
 
@@ -111,6 +112,7 @@ try {
 }
 
 if (!Array.isArray(state.adjustments)) state.adjustments = [];
+if (!Array.isArray(state.overrides)) state.overrides = [];
 // Regolamento predefinito della versione precedente: "Mozzarella tagliata a listelli", "Monili e gioielli"
 // e il diametro della Ruota di carro diventano sole penalità (−5). Le voci restano nello stesso ordine,
 // così i voti già dati non cambiano significato.
@@ -218,6 +220,7 @@ function points(cr, v) {
   return cr.type === 'check' ? (v ? state.event.checkPoints : -state.event.checkPoints) : Number(v) || 0;
 }
 const r2 = (n) => Math.round(n * 100) / 100;
+const overrideOf = (competitorId, categoryId) => state.overrides.find((o) => o.competitorId === competitorId && o.categoryId === categoryId);
 
 // Classifica separata per categoria. Totale = somma dei punti di tutti i giudici + bonus/malus.
 function ranking() {
@@ -232,7 +235,8 @@ function ranking() {
   for (const [c, catId] of entries) {
     const g = groups.find((x) => x.id === catId) || orphan;
     const vs = state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId);
-    const votesTotal = vs.reduce((a, v) => a + v.total, 0);
+    const ov = overrideOf(c.id, catId);
+    const votesTotal = ov ? ov.total : vs.reduce((a, v) => a + v.total, 0);
     const byRole = { gusto: 0, forno: 0 };
     for (const v of vs) byRole[v.role] = (byRole[v.role] || 0) + v.total;
     const bonus = state.adjustments.filter((a) => a.competitorId === c.id && a.categoryId === catId).reduce((a, x) => a + x.delta, 0);
@@ -542,6 +546,9 @@ const server = http.createServer(async (req, res) => {
           judgesExpected: state.judges.filter((j) => criteriaFor(id, j).length).map((j) => j.id),
           judgesVoted: state.judges.filter((j) => hasVoted(j, c, id)).map((j) => j.id),
           bonus: state.adjustments.filter((a) => a.competitorId === c.id && a.categoryId === id).reduce((a, x) => a + x.delta, 0),
+          // Totale dei voti dei giudici (senza bonus/malus) e l'eventuale correzione manuale.
+          votesTotal: r2(state.votes.filter((v) => v.competitorId === c.id && v.categoryId === id).reduce((a, v) => a + v.total, 0)),
+          override: overrideOf(c.id, id) ? overrideOf(c.id, id).total : null,
         })));
         const expectedVotes = entries.reduce((a, e) => a + e.judgesExpected.length, 0);
         return send(res, 200, {
@@ -694,6 +701,20 @@ const server = http.createServer(async (req, res) => {
         save();
         return send(res, 200, { ok: true });
       }
+      if (m === 'POST' && p === '/api/admin/override') {
+        // Correzione manuale del totale voti di un concorrente in una gara. total vuoto = torna al calcolo automatico.
+        const c = state.competitors.find((x) => x.id === body.competitorId);
+        if (!c) return send(res, 404, { error: 'Concorrente non trovato' });
+        if (!c.categoryIds.includes(body.categoryId)) return send(res, 400, { error: 'Gara non valida per questo concorrente' });
+        state.overrides = state.overrides.filter((o) => !(o.competitorId === c.id && o.categoryId === body.categoryId));
+        if (body.total !== null && body.total !== '' && body.total !== undefined) {
+          const total = Number(body.total);
+          if (!Number.isFinite(total) || Math.abs(total) > 100000) return send(res, 400, { error: 'Valore non valido' });
+          state.overrides.push({ competitorId: c.id, categoryId: body.categoryId, total: r2(total), at: new Date().toISOString() });
+        }
+        save();
+        return send(res, 200, { ok: true });
+      }
       if (m === 'POST' && p === '/api/admin/adjust/delete') {
         const i = state.adjustments.findIndex((a) => a.id === body.id);
         if (i >= 0) state.adjustments.splice(i, 1);
@@ -716,6 +737,7 @@ const server = http.createServer(async (req, res) => {
         }
         state.votes = state.votes.filter((v) => (isJudge ? v.judgeId : v.competitorId) !== body.id);
         if (!isJudge) state.adjustments = state.adjustments.filter((a) => a.competitorId !== body.id);
+        if (!isJudge) state.overrides = state.overrides.filter((o) => o.competitorId !== body.id);
         const list = isJudge ? state.judges : state.competitors;
         const i = list.findIndex((x) => x.id === body.id);
         if (i >= 0) list.splice(i, 1);
