@@ -29,7 +29,8 @@ forno ±5: Monili e gioielli
 gusto: Gusto | Cottura | Presentazione`,
   `# Ruota di carro
 forno: Etica professionale | Pulizia
-forno -5: Diametro inferiore a 35 cm ø`,
+forno -5: Diametro inferiore a 35 cm ø
+gusto: Gusto | Cottura | Presentazione`,
 ].join('\n\n');
 
 const DEFAULT_TEAMS = [
@@ -133,13 +134,19 @@ if (typeof state.event.rules === 'string' && /forno -5: (Monili e gioielli|Mozza
   state.event.categories = parseRules(state.event.rules).categories;
   save();
 }
-// Napoletana: votano anche i giudici di gusto (Gusto, Cottura, Presentazione). La riga va in fondo alla categoria,
+// Napoletana e Ruota di carro: votano anche i giudici di gusto (Gusto, Cottura, Presentazione). La riga va in fondo alla categoria,
 // così gli id dei criteri di forno non cambiano e i voti già dati restano validi.
 if (typeof state.event.rules === 'string') {
   const blocks = state.event.rules.split(/\n(?=#)/);
-  const i = blocks.findIndex((b) => /^#\s*Napoletana\s*$/im.test(b.split('\n')[0]));
-  if (i >= 0 && !/^gusto\s*:/im.test(blocks[i])) {
-    blocks[i] = blocks[i].replace(/\s*$/, '') + '\ngusto: Gusto | Cottura | Presentazione' + (i < blocks.length - 1 ? '\n' : '');
+  let changed = false;
+  for (const name of ['Napoletana', 'Ruota di carro']) {
+    const i = blocks.findIndex((b) => new RegExp('^#\\s*' + name + '\\s*$', 'im').test(b.split('\n')[0]));
+    if (i >= 0 && !/^gusto\s*:/im.test(blocks[i])) {
+      blocks[i] = blocks[i].replace(/\s*$/, '') + '\ngusto: Gusto | Cottura | Presentazione' + (i < blocks.length - 1 ? '\n' : '');
+      changed = true;
+    }
+  }
+  if (changed) {
     state.event.rules = blocks.join('\n');
     state.event.categories = parseRules(state.event.rules).categories;
     save();
