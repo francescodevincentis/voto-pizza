@@ -127,12 +127,13 @@
     <div class="card">
         <h2>Concorrenti</h2>
         <form id="addComp" class="row" style="margin-bottom:10px">
-          <input name="number" placeholder="N°" style="width:70px">
+          <input name="number" id="addCompNum" placeholder="N°" title="Lascia vuoto: prende il prossimo numero libero. Stesso numero di un concorrente esistente = gli aggiungi un'altra gara." style="width:80px">
           <select name="categoryId" id="addCompCat" required></select>
           <select name="teamId" id="addCompTeam"></select>
           <input name="name" class="grow" placeholder="Nome (facoltativo, i giudici non lo vedono)">
           <button>Aggiungi</button>
         </form>
+        <p class="muted small">Il numero è quello della pettorina e va in sequenza (1, 2, 3…): se lasci vuoto il campo N° prende il prossimo. Un concorrente che fa più gare tiene <b>lo stesso numero</b>: aggiungi le gare con “+ gara” sulla sua riga (oppure scrivi il suo numero qui). <button type="button" class="ghost small" id="renumber">Rinumera 1, 2, 3…</button></p>
         <div style="overflow-x:auto"><table id="compTable"></table></div>
         <details style="margin-top:12px">
           <summary class="small">Importa da Excel</summary>
@@ -300,6 +301,8 @@ function render() {
   const catOptions = (sel, skip = [], first = '— gara —') => `<option value="">${first}</option>` + ev.categories.filter((k) => !skip.includes(k.id)).map((k) => `<option value="${esc(k.id)}" ${k.id === sel ? 'selected' : ''}>${esc(k.name)}</option>`).join('');
   if (document.activeElement !== $('addCompCat')) { const v = $('addCompCat').value; $('addCompCat').innerHTML = catOptions(v); }
   // Gare del concorrente: una pillola per gara (✕ per toglierla) + menu per aggiungerne un'altra.
+  $('addCompNum').placeholder = 'N° ' + S.nextNumber;
+  S.competitors.sort((a, b) => (parseInt(a.number, 10) || 1e9) - (parseInt(b.number, 10) || 1e9));
   $('compTable').innerHTML = (S.competitors.length ? '<tr><th>N°</th><th>Gare</th><th>Team</th><th>Nome</th><th>QR</th><th></th></tr>' : '') + S.competitors.map((c) => `<tr><td>#${esc(c.number)}</td>
     <td>${c.categoryIds.map((id) => `<span class="gara">${esc(catName(id))}${c.votedCats.includes(id) ? '' : ` <button class="x" data-rm-cat="${c.id}" data-cat="${esc(id)}" title="Togli questa gara">✕</button>`}</span>`).join('')}
       ${c.categoryIds.length < ev.categories.length ? `<select data-add-cat="${c.id}" style="padding:4px 6px;font-size:.8rem">${catOptions('', c.categoryIds, '+ gara')}</select>` : ''}</td>
@@ -333,6 +336,7 @@ $('saveRules').onclick = async () => {
 };
 $('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value, teams: $('setTeams').value.split('\n'), teamSize: Number($('setTeamSize').value), weighted: $('setWeighted').checked, teamExcluded: [...$('setTeamCats').querySelectorAll('input:not(:checked)')].map((x) => x.value) }, 'Impostazioni salvate');
 
+$('renumber').onclick = () => confirm('Rinumerare tutti i concorrenti in sequenza 1, 2, 3… (in ordine di numero attuale)? Se hai già stampato le pettorine andranno ristampate. Voti e gare restano agganciati al concorrente.') && act('/api/admin/competitor/renumber', {}, 'Concorrenti rinumerati');
 $('addComp').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/competitor', { number: f.number.value, name: f.name.value, categoryId: f.categoryId.value, teamId: f.teamId.value }); f.number.value = ''; f.name.value = ''; };
 $('importBtn').onclick = async () => {
   const r = await api('/api/admin/competitor/import', { text: $('importText').value });

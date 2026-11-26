@@ -145,6 +145,15 @@ if (typeof state.event.rules === 'string') {
     save();
   }
 }
+// Numeri di pettorina senza zeri davanti ("03" -> "3"), se non creano doppioni.
+{
+  let changed = false;
+  for (const c of state.competitors) {
+    const n = /^0+\d+$/.test(c.number) ? String(parseInt(c.number, 10)) : null;
+    if (n && !state.competitors.some((x) => x !== c && x.number === n)) { c.number = n; changed = true; }
+  }
+  if (changed) save();
+}
 // Etica professionale e Pulizia diventano due voti separati (stesso ordine: Etica resta k4, Pulizia è il nuovo k5).
 if (typeof state.event.rules === 'string' && /forno:\s*Etica professionale e pulizia/i.test(state.event.rules)) {
   state.event.rules = state.event.rules.replace(/forno:\s*Etica professionale e pulizia/gi, 'forno: Etica professionale | Pulizia');
@@ -180,7 +189,7 @@ function save() {
 
 function seedDemo() {
   const cats = state.event.categories;
-  for (let i = 0; i < 12; i++) addCompetitor(String(i + 1).padStart(2, '0'), '', [cats[i % cats.length].id]);
+  for (let i = 0; i < 12; i++) addCompetitor(String(i + 1), '', [cats[i % cats.length].id]);
   // Due concorrenti iscritti a più gare, per provare il caso.
   state.competitors[0].categoryIds.push('napoletana');
   state.competitors[2].categoryIds.push('genio-e-follia', 'ruota-di-carro');
@@ -197,7 +206,7 @@ function addCompetitor(number, name, categoryIds, teamId = '') {
 
 function nextNumber() {
   const max = state.competitors.reduce((a, c) => Math.max(a, parseInt(c.number, 10) || 0), 0);
-  return String(max + 1).padStart(2, '0');
+  return String(max + 1);
 }
 
 function addJudge(name, role) {
@@ -603,6 +612,7 @@ const server = http.createServer(async (req, res) => {
           roles: ROLES,
           adjustments: state.adjustments,
           votesCount: state.votes.length,
+          nextNumber: nextNumber(),
           expectedVotes,
           ranking: ev.status === 'revealed' ? publicRanking() : null,
           teamRanking: ev.status === 'revealed' ? teamRanking() : null,
@@ -640,6 +650,13 @@ const server = http.createServer(async (req, res) => {
           }
           ev.scaleMin = lo; ev.scaleMax = hi; ev.checkPoints = cp;
         }
+        save();
+        return send(res, 200, { ok: true });
+      }
+      if (m === 'POST' && p === '/api/admin/competitor/renumber') {
+        // Numeri di pettorina in sequenza 1, 2, 3… nell'ordine attuale. Un concorrente = un numero, in tutte le sue gare.
+        const sorted = [...state.competitors].sort((a, b) => (parseInt(a.number, 10) || 1e9) - (parseInt(b.number, 10) || 1e9) || String(a.number).localeCompare(String(b.number)));
+        sorted.forEach((c, i) => { c.number = String(i + 1); });
         save();
         return send(res, 200, { ok: true });
       }
