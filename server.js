@@ -267,8 +267,8 @@ function points(cr, v) {
 }
 const r2 = (n) => Math.round(n * 100) / 100;
 // Punteggio di un concorrente in una gara.
-// Voto ponderato (event.weighted): per ogni criterio, se i giudici che l'hanno votato sono almeno 3, si scartano
-// il voto più alto e il più basso e si fa la media dei rimanenti; con 1–2 giudici media semplice.
+// Voto ponderato (event.weighted): per ogni criterio, se i giudici che l'hanno votato sono almeno 3, il voto più alto
+// e il più basso contano la metà degli altri nella media; con 1–2 giudici media semplice.
 // Totale = somma delle medie dei criteri (gusto + forno). Senza ponderazione: somma dei punti di tutti i giudici.
 function scoreOf(competitorId, catId) {
   const cat = catById(catId);
@@ -281,8 +281,9 @@ function scoreOf(competitorId, catId) {
   for (const cr of cat ? cat.criteria : []) {
     let vals = vs.filter((v) => cr.id in v.scores).map((v) => points(cr, v.scores[cr.id])).sort((a, b) => a - b);
     if (!vals.length) { perCriterion[cr.id] = null; continue; }
-    if (state.event.weighted && vals.length >= 3) vals = vals.slice(1, -1);
-    const mean = vals.reduce((a, x) => a + x, 0) / vals.length;
+    // Voto ponderato: con almeno 3 giudici il voto più alto e il più basso pesano la metà (0,5) degli altri.
+    const w = vals.map((_, i) => (state.event.weighted && vals.length >= 3 && (i === 0 || i === vals.length - 1) ? 0.5 : 1));
+    const mean = vals.reduce((a, x, i) => a + x * w[i], 0) / w.reduce((a, x) => a + x, 0);
     perCriterion[cr.id] = r2(mean);
     if (state.event.weighted) byRole[cr.role] += mean;
   }
