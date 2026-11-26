@@ -219,10 +219,13 @@ function addJudge(name, role) {
 function teamCount(teamId, exceptId) {
   return state.competitors.filter((c) => c.teamId === teamId && c.id !== exceptId).length;
 }
-function teamError(teamId, exceptId) {
+// cats: gare del concorrente. Se nessuna conta per la squadra (es. solo Chef, Amatoriale, Genio e follia, Napoletana)
+// non può entrare in un team.
+function teamError(teamId, exceptId, cats) {
   if (!teamId) return null;
   const t = state.event.teams.find((x) => x.id === teamId);
   if (!t) return 'Team non trovato';
+  if (cats && !cats.some((id) => teamCats().includes(id))) return 'Le gare di questo concorrente non contano per la classifica a squadre: non può entrare in un team.';
   if (teamCount(teamId, exceptId) >= state.event.teamSize) return `${t.name} è già al completo (${state.event.teamSize} concorrenti): scegli un altro team.`;
   return null;
 }
@@ -666,7 +669,7 @@ const server = http.createServer(async (req, res) => {
         const ex = state.competitors.find((c) => c.number === number);
         const teamId = String(body.teamId || '');
         if (ex && teamId && teamId !== ex.teamId) {
-          const err = teamError(teamId, ex.id);
+          const err = teamError(teamId, ex.id, [...ex.categoryIds, ...validCats(body.categoryId)]);
           if (err) return send(res, 409, { error: err });
         }
         if (ex) {
@@ -679,7 +682,7 @@ const server = http.createServer(async (req, res) => {
           save();
           return send(res, 200, { ok: true });
         }
-        const err = teamError(teamId);
+        const err = teamError(teamId, undefined, validCats(body.categoryId));
         if (err) return send(res, 409, { error: err });
         addCompetitor(number, String(body.name || '').trim(), body.categoryId ? [body.categoryId] : [], teamId);
         save();
@@ -711,10 +714,10 @@ const server = http.createServer(async (req, res) => {
             let changed = false;
             if (name && ex.name !== name) { ex.name = name; changed = true; }
             for (const id of validCats(catIds)) if (!ex.categoryIds.includes(id)) { ex.categoryIds.push(id); changed = true; }
-            if (teamId && teamId !== ex.teamId) { if (teamError(teamId, ex.id)) skipped.push(num); else { ex.teamId = teamId; changed = true; } }
+            if (teamId && teamId !== ex.teamId) { if (teamError(teamId, ex.id, ex.categoryIds)) skipped.push(num); else { ex.teamId = teamId; changed = true; } }
             if (changed) updated++;
           } else {
-            if (teamId && teamError(teamId)) { skipped.push(num); teamId = ''; }
+            if (teamId && teamError(teamId, undefined, validCats(catIds))) { skipped.push(num); teamId = ''; }
             addCompetitor(num, name, catIds, teamId); added++;
           }
         }
@@ -740,7 +743,7 @@ const server = http.createServer(async (req, res) => {
           c.teamCategoryId = id;
         }
         if (typeof body.teamId === 'string' && body.teamId !== c.teamId) {
-          const err = teamError(body.teamId, c.id);
+          const err = teamError(body.teamId, c.id, c.categoryIds);
           if (err) return send(res, 409, { error: err });
           c.teamId = body.teamId;
           // Nel nuovo team la sua gara per la squadra potrebbe essere già presa: va scelta di nuovo.

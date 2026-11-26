@@ -23,6 +23,7 @@
   .brand .by { font-size: .78rem; color: #e6b84a; margin-top: 2px; letter-spacing: .02em; }
   @media (max-width: 600px) { .brand img { width: 60px; height: 60px; } }
   header.bar-top .wrap { padding-bottom: 20px; }
+  .wrap { max-width: 1520px; }
   header.bar-top .muted { color: #cfc6bd; }
   .big { font-size: 2rem; font-weight: 800; }
   .matrix td.c { text-align: center; }
@@ -300,16 +301,17 @@ function render() {
   if (!$('setTeamCats').contains(document.activeElement)) $('setTeamCats').innerHTML = ev.categories.map((k) => `<label><input type="checkbox" value="${esc(k.id)}" ${ev.teamExcluded.includes(k.id) ? '' : 'checked'}> ${esc(k.name)}</label>`).join('');
   const catOptions = (sel, skip = [], first = '— gara —') => `<option value="">${first}</option>` + ev.categories.filter((k) => !skip.includes(k.id)).map((k) => `<option value="${esc(k.id)}" ${k.id === sel ? 'selected' : ''}>${esc(k.name)}</option>`).join('');
   if (document.activeElement !== $('addCompCat')) { const v = $('addCompCat').value; $('addCompCat').innerHTML = catOptions(v); }
+  syncAddTeam();
   // Gare del concorrente: una pillola per gara (✕ per toglierla) + menu per aggiungerne un'altra.
   $('addCompNum').placeholder = 'N° ' + S.nextNumber;
   S.competitors.sort((a, b) => (parseInt(a.number, 10) || 1e9) - (parseInt(b.number, 10) || 1e9));
   $('compTable').innerHTML = (S.competitors.length ? '<tr><th>N°</th><th>Gare</th><th>Team</th><th>Nome</th><th>QR</th><th></th></tr>' : '') + S.competitors.map((c) => `<tr><td>#${esc(c.number)}</td>
     <td>${c.categoryIds.map((id) => `<span class="gara">${esc(catName(id))}${c.votedCats.includes(id) ? '' : ` <button class="x" data-rm-cat="${c.id}" data-cat="${esc(id)}" title="Togli questa gara">✕</button>`}</span>`).join('')}
       ${c.categoryIds.length < ev.categories.length ? `<select data-add-cat="${c.id}" style="padding:4px 6px;font-size:.8rem">${catOptions('', c.categoryIds, '+ gara')}</select>` : ''}</td>
-    <td><select data-team-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px">${teamOptions(c.teamId, c.id)}</select>
-      ${c.teamId ? `<div style="margin-top:4px"><select data-teamcat-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px;${c.teamCat ? '' : 'border-color:var(--accent);color:var(--accent)'}">
+    <td>${!c.teamId && !c.categoryIds.some((id) => !ev.teamExcluded.includes(id)) ? `<select disabled style="padding:4px 6px;font-size:.8rem;max-width:170px" title="Le sue gare non contano per la classifica a squadre"><option>— niente squadra —</option></select>` : `<select data-team-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px">${teamOptions(c.teamId, c.id)}</select>`}
+      ${c.teamId && !c.categoryIds.some((id) => !ev.teamExcluded.includes(id)) ? `<div class="small" style="margin-top:4px;color:var(--accent);max-width:170px">⚠ Le sue gare non contano per la squadra: togli il team</div>` : c.teamId ? `<div style="margin-top:4px"><select data-teamcat-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px;${c.teamCat ? '' : 'border-color:var(--accent);color:var(--accent)'}">
         <option value="">${c.teamCat ? '' : '⚠ '}gara per la squadra…</option>${ev.categories.filter((k) => !ev.teamExcluded.includes(k.id)).map((k) => { const t = c.teamTaken.find((x) => x.id === k.id); return `<option value="${esc(k.id)}" ${k.id === c.teamCat ? 'selected' : ''} ${t ? 'disabled' : ''}>Squadra: ${esc(k.name)}${t ? ` (già del #${esc(t.number)})` : ''}</option>`; }).join('')}</select></div>` : ''}</td>
-    <td><input data-name-comp="${c.id}" value="${esc(c.name)}" placeholder="Nome concorrente" title="Scrivi il nome e premi Invio" style="padding:4px 6px;font-size:.9rem;min-width:160px;width:100%"></td><td><a href="${S.base}/v/${c.code}" target="_blank" class="small">link</a></td><td style="text-align:right"><button class="ghost small" data-del-comp="${c.id}">✕</button></td></tr>`).join('');
+    <td><input data-name-comp="${c.id}" value="${esc(c.name)}" placeholder="Nome concorrente" title="Scrivi il nome e premi Invio" style="padding:4px 6px;font-size:.9rem;min-width:160px;width:100%"></td><td><a href="${S.base}/v/${c.code}" target="_blank" class="small">link</a></td><td style="text-align:right"><button class="ghost small" data-del-comp="${c.id}" title="Elimina il concorrente" style="color:var(--accent);white-space:nowrap">🗑 Elimina</button></td></tr>`).join('');
   $('judgeTable').innerHTML = S.judges.map((j) => `<tr><td>${esc(j.name)}</td><td><span class="tag-role ${j.role}">${esc(j.roleLabel.replace('Giudice ', ''))}</span></td><td><a href="${S.base}/j/${j.token}" target="_blank" class="small">link badge</a></td><td style="text-align:right"><button class="ghost small" data-del-judge="${j.id}">✕</button></td></tr>`).join('');
 
   if (rulesDraft === null) { rulesDraft = ev.rules; $('rules').value = ev.rules; }
@@ -337,10 +339,18 @@ $('saveRules').onclick = async () => {
 $('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value, teams: $('setTeams').value.split('\n'), teamSize: Number($('setTeamSize').value), weighted: $('setWeighted').checked, teamExcluded: [...$('setTeamCats').querySelectorAll('input:not(:checked)')].map((x) => x.value) }, 'Impostazioni salvate');
 
 $('renumber').onclick = () => confirm('Rinumerare tutti i concorrenti in sequenza 1, 2, 3… (in ordine di numero attuale)? Se hai già stampato le pettorine andranno ristampate. Voti e gare restano agganciati al concorrente.') && act('/api/admin/competitor/renumber', {}, 'Concorrenti rinumerati');
+// Gara che non conta per la squadra: niente team nel modulo di aggiunta.
+function syncAddTeam() {
+  const k = $('addCompCat').value, off = !!k && S.event.teamExcluded.includes(k);
+  $('addCompTeam').disabled = off;
+  if (off) $('addCompTeam').value = '';
+  $('addCompTeam').title = off ? 'Questa gara non conta per la classifica a squadre' : '';
+}
+$('addCompCat').addEventListener('change', syncAddTeam);
 $('addComp').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/competitor', { number: f.number.value, name: f.name.value, categoryId: f.categoryId.value, teamId: f.teamId.value }); f.number.value = ''; f.name.value = ''; };
 $('importBtn').onclick = async () => {
   const r = await api('/api/admin/competitor/import', { text: $('importText').value });
-  if (r.http !== 200) flash(r.error || 'Errore'); else { flash(`Importati ${r.added} nuovi, aggiornati ${r.updated}` + (r.teamFull && r.teamFull.length ? `. Team pieno, da sistemare: #${r.teamFull.join(', #')}` : ''), !(r.teamFull && r.teamFull.length)); $('importText').value = ''; }
+  if (r.http !== 200) flash(r.error || 'Errore'); else { flash(`Importati ${r.added} nuovi, aggiornati ${r.updated}` + (r.teamFull && r.teamFull.length ? `. Team non assegnato (pieno o gare non valide per la squadra): #${r.teamFull.join(', #')}` : ''), !(r.teamFull && r.teamFull.length)); $('importText').value = ''; }
   load();
 };
 $('addJudge').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/judge', { name: f.name.value, role: f.role.value }); f.name.value = ''; };
