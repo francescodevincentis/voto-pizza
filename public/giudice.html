@@ -90,7 +90,7 @@ function homeScreen(me) {
       <h2>Concorrenti</h2>
       <p class="muted small">In alternativa al QR puoi toccare il concorrente dall'elenco.</p>
       ${me.competitors.map((c) => `<a href="/v/${c.code}?cat=${encodeURIComponent(c.categoryId)}">
-        <span><b>Concorrente #${esc(c.number)}</b> <span class="muted small">${esc(c.category)}</span></span>
+        <span><b>#${esc(c.number)}${c.name ? ' ' + esc(c.name) : ''}</b> <span class="muted small">${esc(c.category)}</span></span>
         <span>${c.voted ? '<span class="pill open">Votato ✓</span>' : '<span class="muted">›</span>'}</span>
       </a>`).join('')}
     </div>`;
@@ -105,7 +105,7 @@ async function voteScreen(code) {
   }
   if (d.choose) {
     // Concorrente iscritto a più gare: il giudice sceglie quale sta assaggiando.
-    app.innerHTML = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div></div>
+    app.innerHTML = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div>${d.competitor.name ? `<div style="font-weight:700;font-size:1.15rem">${esc(d.competitor.name)}</div>` : ''}</div>
       <div class="card list"><h2>Quale gara stai votando?</h2>
       <p class="muted small">Questo concorrente è iscritto a più gare.</p>
       ${d.choose.map((k) => `<a href="/v/${d.competitor.code}?cat=${encodeURIComponent(k.id)}"><span><b>${esc(k.name)}</b></span>
@@ -113,7 +113,7 @@ async function voteScreen(code) {
       </div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
     return;
   }
-  const head = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div><div style="margin-top:6px;font-weight:600">${esc(d.competitor.category)}</div></div>`;
+  const head = `<div class="bib card"><div class="muted small">PETTORINA</div><div class="num">#${esc(d.competitor.number)}</div>${d.competitor.name ? `<div style="font-weight:700;font-size:1.15rem">${esc(d.competitor.name)}</div>` : ''}<div style="margin-top:6px;font-weight:600">${esc(d.competitor.category)}</div></div>`;
   if (d.voted) {
     app.innerHTML = head + `<div class="card" style="text-align:center"><div class="done-ico">🔒</div><h2>Hai già votato questo concorrente in questa gara</h2><p class="muted">Il tuo voto è registrato e segreto.</p></div><a class="btn ghost" href="/giudice">Torna all'elenco</a>`;
     return;

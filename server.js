@@ -499,10 +499,10 @@ const server = http.createServer(async (req, res) => {
           role: judge.role,
           roleLabel: ROLES[judge.role],
           event: { name: state.event.name, status: state.event.status },
-          // I giudici vedono solo numero e categoria: il nome del concorrente non esce mai da qui.
+          // I giudici vedono numero, nome e categoria (scelta dell'organizzatore, 26/11).
           // Una riga per ogni gara del concorrente che spetta a questo giudice.
           competitors: state.competitors.flatMap((c) => judgeCats(judge, c).map((id) => ({
-            number: c.number, code: c.code, categoryId: id, category: catById(id).name, voted: hasVoted(judge, c, id),
+            number: c.number, name: c.name, code: c.code, categoryId: id, category: catById(id).name, voted: hasVoted(judge, c, id),
           }))),
         });
       }
@@ -521,7 +521,7 @@ const server = http.createServer(async (req, res) => {
         // Più gare: il giudice sceglie quale sta valutando.
         if (!wanted && mineCats.length > 1) {
           return send(res, 200, {
-            competitor: { number: c.number, code: c.code },
+            competitor: { number: c.number, name: c.name, code: c.code },
             choose: mineCats.map((id) => ({ id, name: catById(id).name, voted: hasVoted(judge, c, id) })),
           });
         }
@@ -531,7 +531,7 @@ const server = http.createServer(async (req, res) => {
         const criteria = criteriaFor(catId, judge);
         const voted = hasVoted(judge, c, catId);
         return send(res, 200, {
-          competitor: { number: c.number, code: c.code, category: cat.name, categoryId: catId, otherCats: mineCats.length > 1 },
+          competitor: { number: c.number, name: c.name, code: c.code, category: cat.name, categoryId: catId, otherCats: mineCats.length > 1 },
           voted,
           eventStatus: state.event.status,
           criteria: criteria.map(({ id, label, type }) => ({ id, label, type })),
