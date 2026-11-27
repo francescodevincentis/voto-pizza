@@ -187,8 +187,9 @@
         <div style="margin-top:10px"><button class="primary" id="saveSettings">Salva</button></div>
         <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
         <h2>Azzera</h2>
-        <p class="muted small">Cancella tutti i dati (voti compresi).</p>
+        <p class="muted small"><b>Azzera solo i voti</b>: per rifare le prove. Toglie voti, bonus/malus e totali corretti a mano e riapre la votazione; concorrenti, giudici (con i telefoni già abilitati), team e regolamento restano. Prima salva una copia di sicurezza (data-backup-….json). <b>Azzera tutto</b> cancella tutti i dati.</p>
         <div class="row">
+          <button class="danger" id="resetVotes">Azzera solo i voti</button>
           <button class="danger" id="resetEmpty">Azzera tutto</button>
           <button class="danger" id="resetDemo">Azzera e carica demo</button>
         </div>
@@ -405,6 +406,12 @@ document.addEventListener('click', (e) => {
   const u = e.target.dataset.undo;
   if (u && confirm('Annullare questo bonus/malus?')) act('/api/admin/adjust/delete', { id: u }, 'Modifica annullata');
 });
+$('resetVotes').onclick = async () => {
+  if (!confirm(`Cancellare tutti i voti (${S.votesCount}), i bonus/malus e i totali corretti a mano? Concorrenti, giudici e team restano. Viene salvata una copia di sicurezza.`)) return;
+  const r = await api('/api/admin/reset-votes', {});
+  if (r.http !== 200) flash(r.error || 'Errore'); else flash(`Voti azzerati (${r.removed}). Copia di sicurezza: ${r.backup}`, true);
+  load();
+};
 $('resetEmpty').onclick = () => confirm('Cancellare TUTTI i dati, voti compresi?') && act('/api/admin/reset', {}, 'Dati azzerati').then(() => { rulesDraft = null; load(); });
 $('resetDemo').onclick = () => confirm('Cancellare tutto e ricaricare i dati demo?') && act('/api/admin/reset', { demo: true }, 'Demo caricata').then(() => { rulesDraft = null; load(); });
 

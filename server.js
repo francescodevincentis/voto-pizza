@@ -822,6 +822,20 @@ const server = http.createServer(async (req, res) => {
         save();
         return send(res, 200, { ok: true });
       }
+      if (m === 'POST' && p === '/api/admin/reset-votes') {
+        // Per le prove: toglie voti, bonus/malus e correzioni manuali; concorrenti, giudici, team e regolamento restano.
+        // Prima salva una copia di sicurezza accanto a data.json.
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+        const backup = path.join(__dirname, `data-backup-${stamp}.json`);
+        fs.writeFileSync(backup, JSON.stringify(state, null, 2));
+        const removed = state.votes.length;
+        state.votes = [];
+        state.adjustments = [];
+        state.overrides = [];
+        state.event.status = 'open';
+        save();
+        return send(res, 200, { ok: true, removed, backup: path.basename(backup) });
+      }
       if (m === 'POST' && p === '/api/admin/reset') {
         const keep = state.adminPassword;
         state = defaultState();
