@@ -98,7 +98,7 @@ function defaultState() {
       categories: parseRules(DEFAULT_RULES).categories,
     },
     competitors: [], // { id, number, name, categoryIds: [...], code }  un concorrente può iscriversi a più gare
-    judges: [], // { id, name, role: 'gusto'|'forno', token }
+    judges: [], // { id, name, role: 'gusto'|'forno', token, categoryIds: [] = tutte le categorie }
     votes: [], // { judgeId, competitorId, categoryId, role, scores: {criterio: numero | true/false}, total, at }
     adjustments: [], // { id, competitorId, categoryId, delta, note, at }  bonus/malus dell'organizzatore
     overrides: [], // { competitorId, categoryId, total, at }  totale voti corretto a mano dalla regia
@@ -171,6 +171,7 @@ if (!Array.isArray(state.event.teams)) { state.event.teams = defaultTeams(); sta
 if (!Array.isArray(state.event.teamExcluded)) state.event.teamExcluded = ['chef', 'genio-e-follia', 'napoletana', 'amatoriale'];
 else if (state.event.teamExcluded.join() === 'chef,genio-e-follia,napoletana') state.event.teamExcluded.push('amatoriale');
 for (const j of state.judges) if (!ROLES[j.role]) j.role = 'gusto';
+for (const j of state.judges) if (!Array.isArray(j.categoryIds)) j.categoryIds = [];
 // Versione con una sola categoria per concorrente -> elenco di gare.
 for (const c of state.competitors) {
   if (!Array.isArray(c.categoryIds)) c.categoryIds = c.categoryId ? [c.categoryId] : [];
@@ -216,8 +217,9 @@ function nextNumber() {
   return String(max + 1);
 }
 
-function addJudge(name, role) {
-  const j = { id: token(6), name: String(name), role: ROLES[role] ? role : 'gusto', token: token(12) };
+function addJudge(name, role, categoryIds) {
+  const j = { id: token(6), name: String(name), role: ROLES[role] ? role : 'gusto', token: token(12), categoryIds: [] };
+  j.categoryIds = validCats(categoryIds || []).filter((id) => roleCriteria(id, j.role).length);
   state.judges.push(j);
   return j;
 }
@@ -250,9 +252,16 @@ function catById(id) {
   return state.event.categories.find((k) => k.id === id) || null;
 }
 // Criteri che un giudice deve valutare per un concorrente in una gara (dipendono da categoria e tipo di giudice).
-function criteriaFor(catId, judge) {
+function roleCriteria(catId, role) {
   const cat = catById(catId);
-  return cat ? cat.criteria.filter((k) => k.role === judge.role) : [];
+  return cat ? cat.criteria.filter((k) => k.role === role) : [];
+}
+// Categorie assegnate al giudice: lista vuota = tutte (finché la regia non le assegna).
+function judgeAssigned(judge, catId) {
+  return !judge.categoryIds || !judge.categoryIds.length || judge.categoryIds.includes(catId);
+}
+function criteriaFor(catId, judge) {
+  return judgeAssigned(judge, catId) ? roleCriteria(catId, judge.role) : [];
 }
 // Gare di un concorrente che un giudice deve votare.
 function judgeCats(judge, c) {
@@ -529,7 +538,9 @@ const server = http.createServer(async (req, res) => {
         if (!mineCats.length) {
           return send(res, 409, {
             error: c.categoryIds.length
-              ? `Il concorrente #${c.number} gareggia in categorie che non prevedono voti dei ${ROLES[judge.role].toLowerCase()}i: non va votato da te.`
+              ? (c.categoryIds.some((id) => roleCriteria(id, judge.role).length)
+                ? `Il concorrente #${c.number} gareggia in categorie che non ti sono state assegnate: non va votato da te.`
+                : `Il concorrente #${c.number} gareggia in categorie che non prevedono voti dei ${ROLES[judge.role].toLowerCase()}i: non va votato da te.`)
               : `Il concorrente #${c.number} non ha ancora una categoria: avvisa la regia.`,
           });
         }
@@ -627,7 +638,7 @@ const server = http.createServer(async (req, res) => {
           suggestedBase: `http://${lanAddress()}:${PORT}`,
           competitors,
           entries,
-          judges: state.judges.map((j) => ({ ...j, roleLabel: ROLES[j.role], hasVotes: state.votes.some((v) => v.judgeId === j.id) })),
+          judges: state.judges.map((j) => ({ ...j, roleLabel: ROLES[j.role], hasVotes: state.votes.some((v) => v.judgeId === j.id), votedCats: [...new Set(state.votes.filter((v) => v.judgeId === j.id).map((v) => v.categoryId))] })),
           roles: ROLES,
           adjustments: state.adjustments,
           votesCount: state.votes.length,
@@ -802,7 +813,19 @@ const server = http.createServer(async (req, res) => {
       }
       if (m === 'POST' && p === '/api/admin/judge') {
         if (!String(body.name || '').trim()) return send(res, 400, { error: 'Nome obbligatorio' });
-        addJudge(String(body.name).trim(), body.role);
+        addJudge(String(body.name).trim(), body.role, body.categoryIds);
+        save();
+        return send(res, 200, { ok: true });
+      }
+      // Categorie assegnate a un giudice (vuoto = tutte). Non si può togliere una gara in cui ha già votato.
+      if (m === 'POST' && p === '/api/admin/judge/categories') {
+        const j = state.judges.find((x) => x.id === body.id);
+        if (!j) return send(res, 404, { error: 'Giudice non trovato' });
+        const ids = validCats(body.categoryIds || []).filter((id) => roleCriteria(id, j.role).length);
+        const before = j.categoryIds && j.categoryIds.length ? j.categoryIds : state.event.categories.map((k) => k.id);
+        const lost = ids.length ? before.filter((id) => !ids.includes(id) && state.votes.some((v) => v.judgeId === j.id && v.categoryId === id)) : [];
+        if (lost.length) return send(res, 409, { error: `${j.name} ha già votato in ${lost.map((id) => catById(id).name).join(', ')}: non puoi togliergli questa categoria.` });
+        j.categoryIds = ids;
         save();
         return send(res, 200, { ok: true });
       }

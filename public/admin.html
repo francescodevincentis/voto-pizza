@@ -152,8 +152,10 @@
           <select name="role"><option value="gusto">Di gusto</option><option value="forno">Di forno</option></select>
           <button>Aggiungi</button>
         </form>
+        <div id="judgeCount" class="small" style="margin-bottom:10px"></div>
+        <div class="row small" style="margin-bottom:8px;gap:6px">Mostra: <select id="judgeFilter" style="padding:4px 6px;font-size:.85rem"></select></div>
         <table id="judgeTable"></table>
-        <p class="muted small">Ogni giudice inquadra una volta il proprio badge (stampabile da “Stampa QR”) per abilitare il telefono. I giudici <b>di gusto</b> e <b>di forno</b> vedono solo i criteri che spettano a loro.</p>
+        <p class="muted small">Assegna a ogni giudice le sue categorie con <b>+ categoria</b>: sul telefono vedrà solo i concorrenti di quelle gare. Finché non ne assegni nessuna, il giudice vede <b>tutte</b> le categorie. Ogni giudice inquadra una volta il proprio badge (stampabile da “Stampa QR”) per abilitare il telefono. I giudici <b>di gusto</b> e <b>di forno</b> vedono solo i criteri che spettano a loro.</p>
       </div>
     </div>
 
@@ -313,7 +315,19 @@ function render() {
       ${c.teamId && !c.categoryIds.some((id) => !ev.teamExcluded.includes(id)) ? `<div class="small" style="margin-top:4px;color:var(--accent);max-width:170px">⚠ Le sue gare non contano per la squadra: togli il team</div>` : c.teamId ? `<div style="margin-top:4px"><select data-teamcat-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px;${c.teamCat ? '' : 'border-color:var(--accent);color:var(--accent)'}">
         <option value="">${c.teamCat ? '' : '⚠ '}gara per la squadra…</option>${ev.categories.filter((k) => !ev.teamExcluded.includes(k.id)).map((k) => { const t = c.teamTaken.find((x) => x.id === k.id); return `<option value="${esc(k.id)}" ${k.id === c.teamCat ? 'selected' : ''} ${t ? 'disabled' : ''}>Squadra: ${esc(k.name)}${t ? ` (già del #${esc(t.number)})` : ''}</option>`; }).join('')}</select></div>` : ''}</td>
     <td><input data-name-comp="${c.id}" value="${esc(c.name)}" placeholder="Nome concorrente" title="Scrivi il nome e premi Invio" style="padding:4px 6px;font-size:.9rem;min-width:160px;width:100%"></td><td><a href="${S.base}/v/${c.code}" target="_blank" class="small">link</a></td><td style="text-align:right"><button class="ghost small" data-del-comp="${c.id}" title="Elimina il concorrente" style="color:var(--accent);white-space:nowrap">🗑 Elimina</button></td></tr>`).join('');
-  $('judgeTable').innerHTML = S.judges.map((j) => `<tr><td>${esc(j.name)}</td><td><span class="tag-role ${j.role}">${esc(j.roleLabel.replace('Giudice ', ''))}</span></td><td><a href="${S.base}/j/${j.token}" target="_blank" class="small">link badge</a></td><td style="text-align:right"><button class="ghost small" data-del-judge="${j.id}">✕</button></td></tr>`).join('');
+  // Categorie dei giudici: conteggio per gara (max 5 per tipo) e pillole per giudice.
+  const roleCats = (role) => ev.categories.filter((k) => k.criteria.some((x) => x.role === role));
+  const jCats = (j) => (j.categoryIds || []).filter((id) => roleCats(j.role).some((k) => k.id === id));
+  const unassigned = S.judges.filter((j) => !jCats(j).length);
+  const cnt = (k, role) => { if (!k.criteria.some((x) => x.role === role)) return '<td class="muted">—</td>'; const n = S.judges.filter((j) => j.role === role && jCats(j).includes(k.id)).length; return `<td style="${n > 5 ? 'color:var(--accent);font-weight:700' : n === 0 ? 'color:var(--muted)' : ''}">${n}/5${n > 5 ? ' ⚠' : ''}</td>`; };
+  $('judgeCount').innerHTML = `<div style="overflow-x:auto"><table class="small"><tr><th>Giudici assegnati</th>${ev.categories.map((k) => `<th>${esc(k.name)}</th>`).join('')}</tr>${['gusto', 'forno'].map((role) => `<tr><td><span class="tag-role ${role}">${role}</span></td>${ev.categories.map((k) => cnt(k, role)).join('')}</tr>`).join('')}</table></div>${unassigned.length ? `<div style="margin-top:6px;color:var(--accent)">⚠ ${unassigned.length} giudici senza categorie assegnate: per ora vedono tutte le gare.</div>` : ''}`;
+  const jf = $('judgeFilter'), jfv = jf.value || '';
+  jf.innerHTML = `<option value="">Tutti i giudici (${S.judges.length})</option><option value="none">Senza categorie (${unassigned.length})</option>` + ev.categories.map((k) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('');
+  jf.value = jfv;
+  const shown = S.judges.filter((j) => !jfv || (jfv === 'none' ? !jCats(j).length : jCats(j).includes(jfv)));
+  $('judgeTable').innerHTML = shown.map((j) => `<tr><td>${esc(j.name)}</td><td><span class="tag-role ${j.role}">${esc(j.roleLabel.replace('Giudice ', ''))}</span></td>
+    <td>${jCats(j).length ? jCats(j).map((id) => `<span class="gara">${esc(catName(id))}${(j.votedCats || []).includes(id) ? '' : ` <button class="x" data-rm-jcat="${j.id}" data-cat="${esc(id)}" title="Togli questa categoria">✕</button>`}</span>`).join('') : '<span class="muted small">Tutte le categorie</span> '}
+      ${jCats(j).length < roleCats(j.role).length ? `<select data-add-jcat="${j.id}" style="padding:4px 6px;font-size:.8rem"><option value="">+ categoria</option>${roleCats(j.role).filter((k) => !jCats(j).includes(k.id)).map((k) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('')}</select>` : ''}</td><td><a href="${S.base}/j/${j.token}" target="_blank" class="small">link badge</a></td><td style="text-align:right"><button class="ghost small" data-del-judge="${j.id}">✕</button></td></tr>`).join('');
 
   if (rulesDraft === null) { rulesDraft = ev.rules; $('rules').value = ev.rules; }
   $('rulesPreview').innerHTML = ev.categories.map((k) => `<div class="cat-prev"><b>${esc(k.name)}</b>${['gusto', 'forno'].map((role) => {
@@ -368,6 +382,12 @@ document.addEventListener('change', (e) => {
   if (tcat) act('/api/admin/competitor/update', { id: tcat, teamCategoryId: e.target.value }, 'Gara per la squadra aggiornata');
   const tc = e.target.dataset.teamComp;
   if (tc) act('/api/admin/competitor/update', { id: tc, teamId: e.target.value }, 'Team aggiornato');
+  if (e.target.id === 'judgeFilter') render();
+  const aj = e.target.dataset.addJcat;
+  if (aj && e.target.value) {
+    const j = S.judges.find((x) => x.id === aj);
+    act('/api/admin/judge/categories', { id: aj, categoryIds: [...(j.categoryIds || []), e.target.value] }, `Categoria assegnata a ${j.name}`);
+  }
   const id = e.target.dataset.addCat;
   if (id && e.target.value) {
     const c = S.competitors.find((x) => x.id === id);
@@ -389,6 +409,12 @@ document.addEventListener('click', (e) => {
   const c = e.target.dataset.delComp, j = e.target.dataset.delJudge;
   if (c && confirm('Eliminare il concorrente?')) del('/api/admin/competitor/delete', c, 'concorrente');
   if (j && confirm('Eliminare il giudice?')) del('/api/admin/judge/delete', j, 'giudice');
+  const rmj = e.target.dataset.rmJcat;
+  if (rmj) {
+    const j = S.judges.find((x) => x.id === rmj);
+    const left = j.categoryIds.filter((k) => k !== e.target.dataset.cat);
+    if (confirm(`Togliere ${catName(e.target.dataset.cat)} a ${j.name}?${left.length ? '' : ' Senza categorie vedrà di nuovo tutte le gare.'}`)) act('/api/admin/judge/categories', { id: rmj, categoryIds: left });
+  }
   const rm = e.target.dataset.rmCat;
   if (rm) {
     const c = S.competitors.find((x) => x.id === rm);
