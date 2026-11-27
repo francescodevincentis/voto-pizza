@@ -844,6 +844,33 @@ const server = http.createServer(async (req, res) => {
         save();
         return send(res, 200, { ok: true });
       }
+      if (m === 'GET' && p === '/api/admin/export-voti.csv') {
+        // Dettaglio per verificare i conti: ogni voto di ogni giudice, con il peso usato (0,5 = voto più alto o più basso).
+        if (ev.status !== 'revealed') return send(res, 403, 'Disponibile solo dopo la rivelazione');
+        const lines = [['Gara', 'Numero', 'Concorrente', 'Criterio', 'Giudice', 'Voto (punti)', 'Peso', 'Media ponderata del criterio']];
+        for (const c of [...state.competitors].sort((a, b) => (parseInt(a.number, 10) || 0) - (parseInt(b.number, 10) || 0))) {
+          for (const catId of c.categoryIds) {
+            const cat = catById(catId);
+            if (!cat) continue;
+            const vs = state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId);
+            if (!vs.length) continue;
+            const sc = scoreOf(c.id, catId);
+            for (const cr of cat.criteria) {
+              const given = vs.filter((v) => cr.id in v.scores).map((v) => ({ judge: (state.judges.find((j) => j.id === v.judgeId) || { name: '?' }).name, pts: points(cr, v.scores[cr.id]) }));
+              const order = [...given].sort((a, b) => a.pts - b.pts);
+              const lo = order[0], hi = order[order.length - 1];
+              for (const g of given) {
+                const w = ev.weighted && given.length >= 3 && (g === lo || g === hi) ? 0.5 : 1;
+                lines.push([cat.name, c.number, c.name, cr.label, g.judge, g.pts, String(w).replace('.', ','), '']);
+              }
+              if (given.length) lines.push([cat.name, c.number, c.name, cr.label, '', '', '', String(sc.perCriterion[cr.id]).replace('.', ',')]);
+            }
+            lines.push([cat.name, c.number, c.name, 'TOTALE (somma delle medie)', '', '', '', String(sc.total).replace('.', ',')], []);
+          }
+        }
+        const csv = lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
+        return send(res, 200, '\ufeff' + csv, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="voti-dettaglio.csv"' });
+      }
       if (m === 'GET' && p === '/api/admin/export.csv') {
         if (ev.status !== 'revealed') return send(res, 403, 'Disponibile solo dopo la rivelazione');
         // Una sezione per categoria, ognuna con le sue colonne di criteri (media dei giudici).

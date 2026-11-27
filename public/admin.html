@@ -254,7 +254,7 @@ function render() {
     $('rankingBody').innerHTML = `<div class="lock">🔒</div><h2 style="text-align:center">Classifica sigillata</h2>
       <p class="muted" style="text-align:center">I punteggi non sono visibili a nessuno finché non chiudi la votazione e premi “Rivela classifica”.</p>`;
   } else {
-    $('rankingBody').innerHTML = `<div class="row" style="justify-content:space-between"><h2>🏆 Classifiche per categoria</h2><a class="btn ghost" href="/api/admin/export.csv">Scarica CSV</a></div>
+    $('rankingBody').innerHTML = `<div class="row" style="justify-content:space-between"><h2>🏆 Classifiche per categoria</h2><span><a class="btn ghost" href="/api/admin/export.csv">Scarica CSV</a> <a class="btn ghost" href="/api/admin/export-voti.csv" title="Ogni voto di ogni giudice, con il peso usato nel voto ponderato">Dettaglio voti (CSV)</a></span></div>
       ${S.ranking.map((g) => `<h3 class="cat">${esc(g.name)}</h3>
       <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>N°</th><th>Concorrente</th><th>Totale</th><th>Voti</th>${g.criteria.map((c) => `<th title="Media dei giudici di ${c.role}">${esc(c.label)}<br><span style="text-transform:none;font-weight:400">media</span></th>`).join('')}</tr>
       ${g.rows.map((r) => `<tr><td><b>${r.position}°</b></td><td>#${esc(r.number)}</td><td>${esc(r.name)}</td><td><b>${r.total}</b></td><td>${r.votes}</td>${g.criteria.map((c) => `<td>${r.perCriterion[c.id] ?? '–'}</td>`).join('')}</tr>`).join('')}
