@@ -22,10 +22,10 @@ const DEFAULT_RULES = [
   ...['Classica', 'Gourmet', 'Contemporanea', 'Chef', 'Senza Glutine', 'In pala', 'Amatoriale', 'Genio e follia']
     .map((n) => `# ${n}\n${STANDARD}`),
   `# Napoletana
-forno ±5: Impasto | Divisa | Pomodoro 60/80 gr | Mozzarella 80/100 gr
-forno ±5: Mozzarella tagliata a listelli
-forno ±5: Sale sul pomodoro | Basilico in cottura | Oliera | Cottura 90 secondi | Stesura con schiaffo | Infornata con rotatoria senza fuoriuscita | Panetto 180/250 gr | Bordo da 1 a 2 cm (oltre: penalità) | Straccio per pulire la pizza | La pizza non deve superare 35 cm ø
-forno ±5: Monili e gioielli
+forno ±10: Impasto | Divisa | Pomodoro 60/80 gr | Mozzarella 80/100 gr
+forno ±10: Mozzarella tagliata a listelli
+forno ±10: Sale sul pomodoro | Basilico in cottura | Oliera | Cottura 90 secondi | Stesura con schiaffo | Infornata con rotatoria senza fuoriuscita | Panetto 180/250 gr | Bordo da 1 a 2 cm (oltre: penalità) | Straccio per pulire la pizza | La pizza non deve superare 35 cm ø
+forno ±10: Monili e gioielli
 gusto: Gusto | Cottura | Presentazione`,
   `# Ruota di carro
 forno: Etica professionale | Pulizia
@@ -60,7 +60,9 @@ function parseRules(text) {
       const type = !m[2] ? 'score' : /^([-−]|penal)/i.test(m[2]) ? 'penalty' : 'check';
       const labels = m[3].split('|').map((s) => s.trim()).filter(Boolean);
       if (!labels.length) errors.push(`Riga ${i + 1}: nessun criterio dopo i due punti.`);
-      for (const label of labels) cur.criteria.push({ id: 'k' + (cur.criteria.length + 1), label, role, type });
+      // Punti scritti nella riga (es. "forno ±10:" o "forno -5:"); senza numero vale il valore generale della lista di controllo.
+      const pts = m[2] && /\d/.test(m[2]) ? Number(m[2].replace(/\D/g, '')) : undefined;
+      for (const label of labels) cur.criteria.push({ id: 'k' + (cur.criteria.length + 1), label, role, type, ...(pts ? { pts } : {}) });
       return;
     }
     const name = line.replace(/^#+\s*/, '').trim();
@@ -170,6 +172,15 @@ if (typeof state.event.rules === 'string' && /forno:\s*Etica professionale e pul
 if (!Array.isArray(state.event.teams)) { state.event.teams = defaultTeams(); state.event.teamSize = 4; }
 if (!Array.isArray(state.event.teamExcluded)) state.event.teamExcluded = ['chef', 'genio-e-follia', 'napoletana', 'amatoriale'];
 else if (state.event.teamExcluded.join() === 'chef,genio-e-follia,napoletana') state.event.teamExcluded.push('amatoriale');
+// 27/11: Napoletana, lista di controllo dei giudici di forno da ±5 a ±10 (anche Mozzarella a listelli e Monili). Una volta sola.
+if (typeof state.event.rules === 'string' && !state.event.napoletana10) {
+  state.event.rules = state.event.rules.split(/\n(?=#)/).map((b) => (/^#\s*Napoletana\s*$/im.test(b.split('\n')[0]) ? b.replace(/^forno\s*(±|\+\/?-)\s*5\s*:/gim, 'forno ±10:') : b)).join('\n');
+  state.event.napoletana10 = true;
+  state.event.categories = parseRules(state.event.rules).categories;
+  save();
+}
+// Le categorie si rileggono sempre dal regolamento (punti per riga).
+if (typeof state.event.rules === 'string') { const pr = parseRules(state.event.rules); if (!pr.errors.length) state.event.categories = pr.categories; }
 for (const j of state.judges) if (!ROLES[j.role]) j.role = 'gusto';
 for (const j of state.judges) if (!Array.isArray(j.categoryIds)) j.categoryIds = [];
 // Versione con una sola categoria per concorrente -> elenco di gare.
@@ -271,8 +282,9 @@ function hasVoted(judge, c, catId) {
   return state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id && v.categoryId === catId);
 }
 function points(cr, v) {
-  if (cr.type === 'penalty') return v ? 0 : -state.event.checkPoints;
-  return cr.type === 'check' ? (v ? state.event.checkPoints : -state.event.checkPoints) : Number(v) || 0;
+  const P = cr.pts || state.event.checkPoints;
+  if (cr.type === 'penalty') return v ? 0 : -P;
+  return cr.type === 'check' ? (v ? P : -P) : Number(v) || 0;
 }
 const r2 = (n) => Math.round(n * 100) / 100;
 // Punteggio di un concorrente in una gara.
@@ -561,7 +573,7 @@ const server = http.createServer(async (req, res) => {
           competitor: { number: c.number, name: c.name, code: c.code, category: cat.name, categoryId: catId, otherCats: mineCats.length > 1 },
           voted,
           eventStatus: state.event.status,
-          criteria: criteria.map(({ id, label, type }) => ({ id, label, type })),
+          criteria: criteria.map(({ id, label, type, pts }) => ({ id, label, type, pts: pts || state.event.checkPoints })),
           scaleMin: state.event.scaleMin,
           scaleMax: state.event.scaleMax,
           checkPoints: state.event.checkPoints,

@@ -167,7 +167,7 @@
         <div class="row" style="margin:10px 0">
           <label class="small">Voto da <input id="smin" type="number" style="width:70px"></label>
           <label class="small">a <input id="smax" type="number" style="width:80px"></label>
-          <label class="small">Lista di controllo ± <input id="cpts" type="number" min="1" style="width:70px"> punti</label>
+          <label class="small">Lista di controllo ± <input id="cpts" type="number" min="1" style="width:70px"> punti (se la riga non li indica)</label>
           <button class="primary" id="saveRules">Salva regolamento</button>
         </div>
         <details><summary class="small">Anteprima categorie</summary><div id="rulesPreview"></div></details>
@@ -332,7 +332,7 @@ function render() {
   if (rulesDraft === null) { rulesDraft = ev.rules; $('rules').value = ev.rules; }
   $('rulesPreview').innerHTML = ev.categories.map((k) => `<div class="cat-prev"><b>${esc(k.name)}</b>${['gusto', 'forno'].map((role) => {
     const cs = k.criteria.filter((x) => x.role === role);
-    return cs.length ? `<div class="small"><span class="tag-role ${role}">${role}</span>${cs.map((x) => esc(x.label) + (x.type === 'check' ? ` <span class="muted">(±${ev.checkPoints})</span>` : x.type === 'penalty' ? ` <span class="muted">(penalità −${ev.checkPoints})</span>` : '')).join(' · ')}</div>` : '';
+    return cs.length ? `<div class="small"><span class="tag-role ${role}">${role}</span>${cs.map((x) => esc(x.label) + (x.type === 'check' ? ` <span class="muted">(±${x.pts || ev.checkPoints})</span>` : x.type === 'penalty' ? ` <span class="muted">(penalità −${x.pts || ev.checkPoints})</span>` : '')).join(' · ')}</div>` : '';
   }).join('')}</div>`).join('');
   if (!['smin', 'smax', 'cpts'].includes(document.activeElement.id)) { $('smin').value = ev.scaleMin; $('smax').value = ev.scaleMax; $('cpts').value = ev.checkPoints; }
   if (document.activeElement !== $('setName')) $('setName').value = ev.name;
