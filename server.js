@@ -822,9 +822,8 @@ const server = http.createServer(async (req, res) => {
         const j = state.judges.find((x) => x.id === body.id);
         if (!j) return send(res, 404, { error: 'Giudice non trovato' });
         const ids = validCats(body.categoryIds || []).filter((id) => roleCriteria(id, j.role).length);
-        const before = j.categoryIds && j.categoryIds.length ? j.categoryIds : state.event.categories.map((k) => k.id);
-        const lost = ids.length ? before.filter((id) => !ids.includes(id) && state.votes.some((v) => v.judgeId === j.id && v.categoryId === id)) : [];
-        if (lost.length) return send(res, 409, { error: `${j.name} ha già votato in ${lost.map((id) => catById(id).name).join(', ')}: non puoi togliergli questa categoria.` });
+        // Le gare in cui ha già votato restano sempre assegnate (anche passando da "tutte" a una lista).
+        if (ids.length) for (const v of state.votes) if (v.judgeId === j.id && !ids.includes(v.categoryId) && roleCriteria(v.categoryId, j.role).length) ids.push(v.categoryId);
         j.categoryIds = ids;
         save();
         return send(res, 200, { ok: true });
