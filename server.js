@@ -269,12 +269,14 @@ const r2 = (n) => Math.round(n * 100) / 100;
 // Punteggio di un concorrente in una gara.
 // Voto ponderato (event.weighted): per ogni criterio, se i giudici che l'hanno votato sono almeno 3, il voto più alto
 // e il più basso contano la metà degli altri nella media; con 1–2 giudici media semplice.
-// Totale = somma delle medie dei criteri (gusto + forno). Senza ponderazione: somma dei punti di tutti i giudici.
+// Totale = somma dei punti di TUTTI i giudici, con il voto più alto e il più basso di ogni criterio contati a metà
+// (scelta di Francesco, 27/11). Senza ponderazione: somma piena dei punti di tutti i giudici.
 function scoreOf(competitorId, catId) {
   const cat = catById(catId);
   const vs = state.votes.filter((v) => v.competitorId === competitorId && v.categoryId === catId);
   const byRole = { gusto: 0, forno: 0 };
   const perCriterion = {};
+  const sums = {}; // somma ponderata per criterio (voto ponderato)
   if (!state.event.weighted) {
     for (const v of vs) byRole[v.role] = (byRole[v.role] || 0) + v.total;
   }
@@ -283,11 +285,11 @@ function scoreOf(competitorId, catId) {
     if (!vals.length) { perCriterion[cr.id] = null; continue; }
     // Voto ponderato: con almeno 3 giudici il voto più alto e il più basso pesano la metà (0,5) degli altri.
     const w = vals.map((_, i) => (state.event.weighted && vals.length >= 3 && (i === 0 || i === vals.length - 1) ? 0.5 : 1));
-    const mean = vals.reduce((a, x, i) => a + x * w[i], 0) / w.reduce((a, x) => a + x, 0);
-    perCriterion[cr.id] = r2(mean);
-    if (state.event.weighted) byRole[cr.role] += mean;
+    const sum = vals.reduce((a, x, i) => a + x * w[i], 0);
+    perCriterion[cr.id] = r2(sum / w.reduce((a, x) => a + x, 0)); // media mostrata nelle colonne
+    if (state.event.weighted) { byRole[cr.role] += sum; sums[cr.id] = r2(sum); }
   }
-  return { vs, byRole, perCriterion, total: r2(byRole.gusto + byRole.forno) };
+  return { vs, byRole, perCriterion, sums, total: r2(byRole.gusto + byRole.forno) };
 }
 const overrideOf = (competitorId, categoryId) => state.overrides.find((o) => o.competitorId === competitorId && o.categoryId === categoryId);
 
@@ -847,7 +849,7 @@ const server = http.createServer(async (req, res) => {
       if (m === 'GET' && p === '/api/admin/export-voti.csv') {
         // Dettaglio per verificare i conti: ogni voto di ogni giudice, con il peso usato (0,5 = voto più alto o più basso).
         if (ev.status !== 'revealed') return send(res, 403, 'Disponibile solo dopo la rivelazione');
-        const lines = [['Gara', 'Numero', 'Concorrente', 'Criterio', 'Giudice', 'Voto (punti)', 'Peso', 'Media ponderata del criterio']];
+        const lines = [['Gara', 'Numero', 'Concorrente', 'Criterio', 'Giudice', 'Voto (punti)', 'Peso', 'Punti contati (voto × peso)']];
         for (const c of [...state.competitors].sort((a, b) => (parseInt(a.number, 10) || 0) - (parseInt(b.number, 10) || 0))) {
           for (const catId of c.categoryIds) {
             const cat = catById(catId);
@@ -861,11 +863,11 @@ const server = http.createServer(async (req, res) => {
               const lo = order[0], hi = order[order.length - 1];
               for (const g of given) {
                 const w = ev.weighted && given.length >= 3 && (g === lo || g === hi) ? 0.5 : 1;
-                lines.push([cat.name, c.number, c.name, cr.label, g.judge, g.pts, String(w).replace('.', ','), '']);
+                lines.push([cat.name, c.number, c.name, cr.label, g.judge, g.pts, String(w).replace('.', ','), String(r2(g.pts * w)).replace('.', ',')]);
               }
-              if (given.length) lines.push([cat.name, c.number, c.name, cr.label, '', '', '', String(sc.perCriterion[cr.id]).replace('.', ',')]);
+              if (given.length) lines.push([cat.name, c.number, c.name, cr.label + ' (totale criterio)', '', '', '', String(r2(given.reduce((a, g) => a + g.pts * (ev.weighted && given.length >= 3 && (g === lo || g === hi) ? 0.5 : 1), 0))).replace('.', ',')]);
             }
-            lines.push([cat.name, c.number, c.name, 'TOTALE (somma delle medie)', '', '', '', String(sc.total).replace('.', ',')], []);
+            lines.push([cat.name, c.number, c.name, 'TOTALE', '', '', '', String(sc.total).replace('.', ',')], []);
           }
         }
         const csv = lines.map((l) => l.map((x) => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\n');
