@@ -180,7 +180,7 @@
         <label class="small muted">Indirizzo usato nei QR</label>
         <input id="setBase" style="width:100%" placeholder="">
         <p class="muted small" id="baseHint"></p>
-        <label class="small" style="display:block;margin:10px 0"><input type="checkbox" id="setWeighted"> <b>Voto ponderato</b> <span class="muted">— per ogni criterio media ponderata: con 5 giudici il voto più basso e il più alto valgono il 5% ciascuno e i tre centrali il 30%; con 4 giudici 7% · 43% · 43% · 7%; con 3 giudici 12,5% · 75% · 12,5%; con 1–2 giudici media semplice. La media ponderata di ogni criterio si moltiplica × 5 (come la somma di 5 giudici). Spento: somma dei voti di tutti i giudici.</span></label>
+        <label class="small" style="display:block;margin:10px 0"><input type="checkbox" id="setWeighted"> <b>Voto ponderato</b> <span class="muted">— per ogni criterio media ponderata: con 5 giudici il voto più basso e il più alto valgono il 5% ciascuno e i tre centrali il 30%; con 4 giudici 7% · 43% · 43% · 7%; con 3 giudici 12,5% · 75% · 12,5%; con 1–2 giudici media semplice. La media ponderata dei criteri di gusto si moltiplica × 5 (come la somma di 5 giudici); quella del forno no. Spento: somma dei voti di tutti i giudici.</span></label>
         <label class="small muted">Team (uno per riga; cambiare il nome non sposta i concorrenti)</label>
         <textarea id="setTeams" rows="6" style="width:100%"></textarea>
         <label class="small muted">Massimo concorrenti per team <input id="setTeamSize" type="number" min="1" style="width:70px"></label>
@@ -325,7 +325,7 @@ function render() {
   jf.innerHTML = `<option value="">Tutti i giudici (${S.judges.length})</option><option value="none">Senza categorie (${unassigned.length})</option>` + ev.categories.map((k) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('');
   jf.value = jfv;
   const shown = S.judges.filter((j) => !jfv || (jfv === 'none' ? !jCats(j).length : jCats(j).includes(jfv)));
-  $('judgeTable').innerHTML = shown.map((j) => `<tr><td>${esc(j.name)}</td><td><span class="tag-role ${j.role}">${esc(j.roleLabel.replace('Giudice ', ''))}</span></td>
+  $('judgeTable').innerHTML = shown.map((j) => `<tr><td><input data-name-judge="${j.id}" value="${esc(j.name)}" title="Scrivi il nome e premi Invio" style="padding:4px 6px;font-size:.9rem;min-width:170px"></td><td><span class="tag-role ${j.role}">${esc(j.roleLabel.replace('Giudice ', ''))}</span></td>
     <td>${jCats(j).length ? jCats(j).map((id) => `<span class="gara">${esc(catName(id))}${(j.votedCats || []).includes(id) ? '' : ` <button class="x" data-rm-jcat="${j.id}" data-cat="${esc(id)}" title="Togli questa categoria">✕</button>`}</span>`).join('') : '<span class="muted small">Tutte le categorie</span> '}
       ${jCats(j).length < roleCats(j.role).length ? `<select data-add-jcat="${j.id}" style="padding:4px 6px;font-size:.8rem"><option value="">+ categoria</option>${roleCats(j.role).filter((k) => !jCats(j).includes(k.id)).map((k) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('')}</select>` : ''}</td><td><a href="${S.base}/j/${j.token}" target="_blank" class="small">link badge</a></td><td style="text-align:right"><button class="ghost small" data-del-judge="${j.id}">✕</button></td></tr>`).join('');
 
@@ -372,6 +372,8 @@ $('addJudge').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/
 document.addEventListener('change', (e) => {
   const nm = e.target.dataset.nameComp;
   if (nm) act('/api/admin/competitor/update', { id: nm, name: e.target.value }, 'Nome aggiornato');
+  const nj = e.target.dataset.nameJudge;
+  if (nj) act('/api/admin/judge/update', { id: nj, name: e.target.value }, 'Nome giudice aggiornato');
   const ov = e.target.dataset.ov;
   if (ov) {
     const v = e.target.value.trim();

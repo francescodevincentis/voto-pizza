@@ -313,8 +313,9 @@ function scoreOf(competitorId, catId) {
     let vals = vs.filter((v) => cr.id in v.scores).map((v) => points(cr, v.scores[cr.id])).sort((a, b) => a - b);
     if (!vals.length) { perCriterion[cr.id] = null; continue; }
     const w = weightsFor(vals.length);
-    // Media ponderata (pesi che sommano a 1) × 5 giudici (richiesta del cliente, 28/11): il criterio vale come la somma di 5 voti.
-    const val = vals.reduce((a, x, i) => a + x * w[i], 0) * (state.event.weighted ? WEIGHT_MULT : 1);
+    // Media ponderata (pesi che sommano a 1); gusto × 5 giudici (richiesta del cliente, 28/11): il criterio vale come la somma di 5 voti.
+    // Solo i criteri di gusto: i voti del forno non si moltiplicano (Francesco, 28/11).
+    const val = vals.reduce((a, x, i) => a + x * w[i], 0) * (state.event.weighted && cr.role === 'gusto' ? WEIGHT_MULT : 1);
     perCriterion[cr.id] = r2(val);
     if (state.event.weighted) byRole[cr.role] += val;
   }
@@ -831,6 +832,14 @@ const server = http.createServer(async (req, res) => {
         save();
         return send(res, 200, { ok: true });
       }
+      if (m === 'POST' && p === '/api/admin/judge/update') {
+        const j = state.judges.find((x) => x.id === body.id);
+        if (!j) return send(res, 404, { error: 'Giudice non trovato' });
+        if (!String(body.name || '').trim()) return send(res, 400, { error: 'Nome obbligatorio' });
+        j.name = String(body.name).trim();
+        save();
+        return send(res, 200, { ok: true });
+      }
       // Categorie assegnate a un giudice (vuoto = tutte). Non si può togliere una gara in cui ha già votato.
       if (m === 'POST' && p === '/api/admin/judge/categories') {
         const j = state.judges.find((x) => x.id === body.id);
@@ -905,8 +914,9 @@ const server = http.createServer(async (req, res) => {
               const ws = weightsFor(order.length);
               const pct = (x) => String(r2(x * 100)).replace('.', ',') + '%';
               order.forEach((g, k) => lines.push([cat.name, c.number, c.name, cr.label, g.judge, g.pts, pct(ws[k]), String(r2(g.pts * ws[k])).replace('.', ',')]));
-              if (given.length && ev.weighted) lines.push([cat.name, c.number, c.name, cr.label + ' (media ponderata)', '', '', '', String(r2(sc.perCriterion[cr.id] / WEIGHT_MULT)).replace('.', ',')]);
-              if (given.length) lines.push([cat.name, c.number, c.name, cr.label + (ev.weighted ? ` (voto del criterio = media ponderata × ${WEIGHT_MULT})` : ' (voto del criterio)'), '', '', '', String(sc.perCriterion[cr.id]).replace('.', ',')]);
+              const mult = ev.weighted && cr.role === 'gusto';
+              if (given.length && mult) lines.push([cat.name, c.number, c.name, cr.label + ' (media ponderata)', '', '', '', String(r2(sc.perCriterion[cr.id] / WEIGHT_MULT)).replace('.', ',')]);
+              if (given.length) lines.push([cat.name, c.number, c.name, cr.label + (mult ? ` (voto del criterio = media ponderata × ${WEIGHT_MULT})` : ev.weighted ? ' (voto del criterio = media ponderata)' : ' (voto del criterio)'), '', '', '', String(sc.perCriterion[cr.id]).replace('.', ',')]);
             }
             lines.push([cat.name, c.number, c.name, 'TOTALE', '', '', '', String(sc.total).replace('.', ',')], []);
           }
