@@ -278,6 +278,9 @@ function criteriaFor(catId, judge) {
 function judgeCats(judge, c) {
   return c.categoryIds.filter((id) => criteriaFor(id, judge).length > 0);
 }
+function isFull(judge, c, catId) {
+  return !hasVoted(judge, c, catId) && state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId && v.role === judge.role).length >= MAX_JUDGES;
+}
 function hasVoted(judge, c, catId) {
   return state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id && v.categoryId === catId);
 }
@@ -301,6 +304,7 @@ function weightsFor(n) {
   return raw.map((x) => x / tot);
 }
 const WEIGHT_MULT = 5;
+const MAX_JUDGES = 5;
 function scoreOf(competitorId, catId) {
   const cat = catById(catId);
   const vs = state.votes.filter((v) => v.competitorId === competitorId && v.categoryId === catId);
@@ -541,7 +545,7 @@ const server = http.createServer(async (req, res) => {
           event: { name: state.event.name, status: state.event.status },
           // I giudici vedono numero, nome e categoria (scelta dell'organizzatore, 26/11).
           // Una riga per ogni gara del concorrente che spetta a questo giudice.
-          competitors: state.competitors.flatMap((c) => judgeCats(judge, c).map((id) => ({
+          competitors: state.competitors.flatMap((c) => judgeCats(judge, c).filter((id) => !isFull(judge, c, id)).map((id) => ({
             number: c.number, name: c.name, code: c.code, categoryId: id, category: catById(id).name, voted: hasVoted(judge, c, id),
           }))),
         });
@@ -549,13 +553,15 @@ const server = http.createServer(async (req, res) => {
       if (m === 'GET' && p.startsWith('/api/judge/competitor/')) {
         const c = state.competitors.find((x) => x.code === p.split('/').pop());
         if (!c) return send(res, 404, { error: 'QR concorrente non valido' });
-        const mineCats = judgeCats(judge, c);
+        const allMine = judgeCats(judge, c);
+        const mineCats = allMine.filter((id) => !isFull(judge, c, id));
+        if (allMine.length && !mineCats.length) return send(res, 409, { error: `Il concorrente #${c.number} ha già i voti di ${MAX_JUDGES} giudici di ${judge.role}: non serve il tuo voto.` });
         if (!mineCats.length) {
           return send(res, 409, {
             error: c.categoryIds.length
               ? (c.categoryIds.some((id) => roleCriteria(id, judge.role).length)
                 ? `Il concorrente #${c.number} gareggia in categorie che non ti sono state assegnate: non va votato da te.`
-                : `Il concorrente #${c.number} gareggia in categorie che non prevedono voti dei ${ROLES[judge.role].toLowerCase()}i: non va votato da te.`)
+                : `Il concorrente #${c.number} gareggia in categorie che non prevedono voti da parte dei giudici di ${judge.role}: non va votato da te.`)
               : `Il concorrente #${c.number} non ha ancora una categoria: avvisa la regia.`,
           });
         }
@@ -591,6 +597,10 @@ const server = http.createServer(async (req, res) => {
         if (!judgeCats(judge, c).includes(catId)) return send(res, 409, { error: 'Questa gara non va votata da te.' });
         if (hasVoted(judge, c, catId)) {
           return send(res, 409, { error: 'Hai già votato questo concorrente in questa gara. Il voto è definitivo.' });
+        }
+        // Al massimo 5 giudici per tipo (gusto/forno) su ogni concorrente in una gara: il 6° voto viene rifiutato.
+        if (state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId && v.role === judge.role).length >= MAX_JUDGES) {
+          return send(res, 409, { error: `Il concorrente #${c.number} in questa gara ha già i voti di ${MAX_JUDGES} giudici di ${judge.role}: non serve il tuo voto.` });
         }
         const criteria = criteriaFor(catId, judge);
         const scores = {};
