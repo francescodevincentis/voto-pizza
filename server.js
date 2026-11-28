@@ -300,6 +300,7 @@ function weightsFor(n) {
   const tot = raw.reduce((a, x) => a + x, 0);
   return raw.map((x) => x / tot);
 }
+const WEIGHT_MULT = 5;
 function scoreOf(competitorId, catId) {
   const cat = catById(catId);
   const vs = state.votes.filter((v) => v.competitorId === competitorId && v.categoryId === catId);
@@ -312,7 +313,8 @@ function scoreOf(competitorId, catId) {
     let vals = vs.filter((v) => cr.id in v.scores).map((v) => points(cr, v.scores[cr.id])).sort((a, b) => a - b);
     if (!vals.length) { perCriterion[cr.id] = null; continue; }
     const w = weightsFor(vals.length);
-    const val = vals.reduce((a, x, i) => a + x * w[i], 0); // media ponderata (pesi che sommano a 1)
+    // Media ponderata (pesi che sommano a 1) × 5 giudici (richiesta del cliente, 28/11): il criterio vale come la somma di 5 voti.
+    const val = vals.reduce((a, x, i) => a + x * w[i], 0) * (state.event.weighted ? WEIGHT_MULT : 1);
     perCriterion[cr.id] = r2(val);
     if (state.event.weighted) byRole[cr.role] += val;
   }
@@ -903,7 +905,8 @@ const server = http.createServer(async (req, res) => {
               const ws = weightsFor(order.length);
               const pct = (x) => String(r2(x * 100)).replace('.', ',') + '%';
               order.forEach((g, k) => lines.push([cat.name, c.number, c.name, cr.label, g.judge, g.pts, pct(ws[k]), String(r2(g.pts * ws[k])).replace('.', ',')]));
-              if (given.length) lines.push([cat.name, c.number, c.name, cr.label + ' (voto del criterio)', '', '', '', String(sc.perCriterion[cr.id]).replace('.', ',')]);
+              if (given.length && ev.weighted) lines.push([cat.name, c.number, c.name, cr.label + ' (media ponderata)', '', '', '', String(r2(sc.perCriterion[cr.id] / WEIGHT_MULT)).replace('.', ',')]);
+              if (given.length) lines.push([cat.name, c.number, c.name, cr.label + (ev.weighted ? ` (voto del criterio = media ponderata × ${WEIGHT_MULT})` : ' (voto del criterio)'), '', '', '', String(sc.perCriterion[cr.id]).replace('.', ',')]);
             }
             lines.push([cat.name, c.number, c.name, 'TOTALE', '', '', '', String(sc.total).replace('.', ',')], []);
           }
