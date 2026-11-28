@@ -279,7 +279,7 @@ function judgeCats(judge, c) {
   return c.categoryIds.filter((id) => criteriaFor(id, judge).length > 0);
 }
 function isFull(judge, c, catId) {
-  return !hasVoted(judge, c, catId) && state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId && v.role === judge.role).length >= MAX_JUDGES;
+  return !hasVoted(judge, c, catId) && state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId && v.role === judge.role).length >= MAX_JUDGES[judge.role];
 }
 function hasVoted(judge, c, catId) {
   return state.votes.some((v) => v.judgeId === judge.id && v.competitorId === c.id && v.categoryId === catId);
@@ -304,7 +304,8 @@ function weightsFor(n) {
   return raw.map((x) => x / tot);
 }
 const WEIGHT_MULT = 5;
-const MAX_JUDGES = 5;
+// Giudici votanti per concorrente in ogni gara (Francesco, 28/11): 5 di gusto, 1 di forno.
+const MAX_JUDGES = { gusto: 5, forno: 1 };
 function scoreOf(competitorId, catId) {
   const cat = catById(catId);
   const vs = state.votes.filter((v) => v.competitorId === competitorId && v.categoryId === catId);
@@ -555,7 +556,7 @@ const server = http.createServer(async (req, res) => {
         if (!c) return send(res, 404, { error: 'QR concorrente non valido' });
         const allMine = judgeCats(judge, c);
         const mineCats = allMine.filter((id) => !isFull(judge, c, id));
-        if (allMine.length && !mineCats.length) return send(res, 409, { error: `Il concorrente #${c.number} ha già i voti di ${MAX_JUDGES} giudici di ${judge.role}: non serve il tuo voto.` });
+        if (allMine.length && !mineCats.length) return send(res, 409, { error: `Il concorrente #${c.number} ha già ${MAX_JUDGES[judge.role] === 1 ? 'il voto del giudice' : `i voti di ${MAX_JUDGES[judge.role]} giudici`} di ${judge.role}: non serve il tuo voto.` });
         if (!mineCats.length) {
           return send(res, 409, {
             error: c.categoryIds.length
@@ -599,8 +600,8 @@ const server = http.createServer(async (req, res) => {
           return send(res, 409, { error: 'Hai già votato questo concorrente in questa gara. Il voto è definitivo.' });
         }
         // Al massimo 5 giudici per tipo (gusto/forno) su ogni concorrente in una gara: il 6° voto viene rifiutato.
-        if (state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId && v.role === judge.role).length >= MAX_JUDGES) {
-          return send(res, 409, { error: `Il concorrente #${c.number} in questa gara ha già i voti di ${MAX_JUDGES} giudici di ${judge.role}: non serve il tuo voto.` });
+        if (state.votes.filter((v) => v.competitorId === c.id && v.categoryId === catId && v.role === judge.role).length >= MAX_JUDGES[judge.role]) {
+          return send(res, 409, { error: `Il concorrente #${c.number} in questa gara ha già ${MAX_JUDGES[judge.role] === 1 ? 'il voto del giudice' : `i voti di ${MAX_JUDGES[judge.role]} giudici`} di ${judge.role}: non serve il tuo voto.` });
         }
         const criteria = criteriaFor(catId, judge);
         const scores = {};
