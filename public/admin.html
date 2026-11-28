@@ -6,17 +6,59 @@
 <title>Regia votazione</title>
 <link rel="stylesheet" href="/style.css">
 <style>
-  header.bar-top { background: var(--ink); color: #fff; }
+  #intro { position: fixed; inset: 0; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+           background: radial-gradient(circle at 50% 42%, #fff 0%, #fff 38%, #f6ead6 80%, #efdcbf 100%); cursor: pointer; transition: opacity .9s ease; padding: 16px; }
+  #intro.out { opacity: 0; pointer-events: none; }
+  #intro img { width: min(420px, 78vw); height: auto; animation: introLogo 1.6s cubic-bezier(.2,.8,.2,1) both; mix-blend-mode: multiply; }
+  #intro .credit { text-align: center; font-size: 1.05rem; color: #5b4a3c; letter-spacing: .02em; animation: introText 1s ease 1s both; }
+  #intro .credit b { font-size: 1.35rem; color: #1f1a17; }
+  #intro .skip { position: absolute; bottom: 22px; font-size: .8rem; color: #a08f80; animation: introText 1s ease 2s both; }
+  @keyframes introLogo { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: none; } }
+  @keyframes introText { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  header.bar-top { background: linear-gradient(100deg, #1f1a17 0%, #3a2420 60%, #6b2a1f 100%); color: #fff; border-bottom: 4px solid; border-image: linear-gradient(90deg, #2f8f4e 0 33%, #fff 33% 66%, #c8402b 66%) 1; }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .brand img { width: 100px; height: 100px; border-radius: 16px; background: #fff; padding: 4px; object-fit: contain; box-shadow: 0 4px 14px rgba(0,0,0,.35); flex: none; }
+  #intro a.iam { color: #c8402b; font-weight: 700; text-decoration: none; border-bottom: 2px solid currentColor; }
+  .brand .by a.iam { color: #e6b84a; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
+  .brand .by { font-size: .78rem; color: #e6b84a; margin-top: 2px; letter-spacing: .02em; }
+  @media (max-width: 600px) { .brand img { width: 60px; height: 60px; } }
   header.bar-top .wrap { padding-bottom: 20px; }
+  .wrap { max-width: 1520px; }
   header.bar-top .muted { color: #cfc6bd; }
   .big { font-size: 2rem; font-weight: 800; }
   .matrix td.c { text-align: center; }
   .matrix th.j { text-align: center; font-size: .7rem; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; }
   .lock { font-size: 3rem; text-align: center; }
-  .crit-row { display: grid; grid-template-columns: 1fr 90px 36px; gap: 8px; margin-bottom: 8px; }
+  #rules { width: 100%; font-family: ui-monospace, Menlo, monospace; font-size: .85rem; line-height: 1.5; }
+  .cat-prev { border-top: 1px solid var(--line); padding: 8px 0; }
+  .cat-prev b { display: block; }
+  .tag-role { display: inline-block; font-size: .72rem; font-weight: 700; padding: 1px 7px; border-radius: 99px; margin-right: 4px; }
+  .tag-role.gusto { background: #fcefd9; color: var(--warn); }
+  .tag-role.forno { background: #fbe3df; color: var(--accent); }
+  .matrix td.na { background: #faf7f3; }
+  .matrix input.tot { width: 90px; padding: 4px 6px; font-size: .95rem; font-weight: 700; }
+  .matrix input.tot.man { border-color: var(--accent); color: var(--accent); }
+  h3.cat { margin: 18px 0 6px; }
+  .gara { display: inline-flex; align-items: center; gap: 4px; background: #f1ebe4; border-radius: 99px; padding: 2px 4px 2px 10px; margin: 2px 4px 2px 0; font-size: .82rem; white-space: nowrap; }
+  .gara:not(:has(.x)) { padding-right: 10px; }
+  .gara .x { background: none; color: var(--muted); padding: 0 6px; font-size: .75rem; }
 </style>
 </head>
 <body>
+<!-- Intro all'apertura della regia: logo del campionato e crediti, poi la dashboard. -->
+<div id="intro" onclick="closeIntro()">
+  <img src="/logo.jpg" alt="3° Campionato Mondiale di Pizza Contemporanea">
+  <div class="credit">Ideato e prodotto da<br><b>Francesco De Vincentis</b> · <a class="iam" href="https://iampassion.it" target="_blank" rel="noopener" onclick="event.stopPropagation()">IAM PASSION</a></div>
+  <div class="skip">tocca per entrare</div>
+</div>
+<script>
+  function closeIntro() { const el = document.getElementById('intro'); if (!el || el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 900); }
+  (function () {
+    let seen = false;
+    try { seen = sessionStorage.getItem('introSeen') === '1'; sessionStorage.setItem('introSeen', '1'); } catch (e) {}
+    if (seen) document.getElementById('intro').remove(); else setTimeout(closeIntro, 4200);
+  })();
+</script>
 
 <section id="login" class="wrap narrow hidden">
   <div class="card" style="margin-top:40px">
@@ -34,9 +76,13 @@
   <header class="bar-top">
     <div class="wrap">
       <div class="row" style="justify-content:space-between">
-        <div>
-          <div class="muted small">REGIA</div>
-          <h1 id="evName" style="margin:0"></h1>
+        <div class="brand">
+          <img src="/logo.jpg" alt="3° Campionato Mondiale di Pizza Contemporanea">
+          <div>
+            <div class="muted small">REGIA · 3° CAMPIONATO MONDIALE DI PIZZA CONTEMPORANEA</div>
+            <h1 id="evName" style="margin:0"></h1>
+            <div class="by">Ideato e prodotto da Francesco De Vincentis · <a class="iam" href="https://iampassion.it" target="_blank" rel="noopener">IAM PASSION</a></div>
+          </div>
         </div>
         <div class="row">
           <span id="statusPill" class="pill"></span>
@@ -66,46 +112,65 @@
     </div>
 
     <div class="card">
+      <h2>Bonus / malus</h2>
+      <p class="muted small">Modifica al volo il punteggio di un concorrente in una gara: ogni clic vale ±2 e si somma al totale. <b>Non compare in classifica, sullo schermo né nel CSV</b>: lo vedi solo qui. Ogni modifica resta nello storico e si può annullare.</p>
+      <input id="adjNote" style="width:100%;margin-bottom:10px" placeholder="Motivo (facoltativo), es. fuori tempo, penalità igiene…">
+      <div style="overflow-x:auto"><table id="adjTable"></table></div>
+      <div id="adjLog"></div>
+    </div>
+
+    <div class="card">
       <h2>Avanzamento per concorrente</h2>
-      <p class="muted small">Vedi solo <b>chi ha votato</b>, mai il punteggio: i voti restano segreti fino alla rivelazione.</p>
+      <p class="muted small">Pallini = chi ha votato. <b>Voti</b> = totale in quella gara (voto ponderato se attivo in Impostazioni; bonus/malus escluso): puoi correggerlo a mano scrivendo il nuovo valore e premendo Invio. ↺ torna al totale calcolato.</p>
       <div style="overflow-x:auto"><table class="matrix" id="matrix"></table></div>
     </div>
 
-    <div class="grid">
-      <div class="card">
+    <div class="card">
         <h2>Concorrenti</h2>
         <form id="addComp" class="row" style="margin-bottom:10px">
-          <input name="number" placeholder="N°" style="width:70px">
-          <input name="name" class="grow" placeholder="Nome concorrente / pizzeria" required>
+          <input name="number" id="addCompNum" placeholder="N°" title="Lascia vuoto: prende il prossimo numero libero. Stesso numero di un concorrente esistente = gli aggiungi un'altra gara." style="width:80px">
+          <select name="categoryId" id="addCompCat" required></select>
+          <select name="teamId" id="addCompTeam"></select>
+          <input name="name" class="grow" placeholder="Nome (facoltativo, lo vedono anche i giudici)">
           <button>Aggiungi</button>
         </form>
-        <table id="compTable"></table>
-      </div>
+        <p class="muted small">Il numero è quello della pettorina e va in sequenza (1, 2, 3…): se lasci vuoto il campo N° prende il prossimo. Un concorrente che fa più gare tiene <b>lo stesso numero</b>: aggiungi le gare con “+ gara” sulla sua riga (oppure scrivi il suo numero qui). <button type="button" class="ghost small" id="renumber">Rinumera 1, 2, 3…</button></p>
+        <div style="overflow-x:auto"><table id="compTable"></table></div>
+        <details style="margin-top:12px">
+          <summary class="small">Importa da Excel</summary>
+          <p class="muted small">Copia da Excel le colonne <b>Numero</b>, <b>Gara</b> e (se vuoi) <b>Team</b> e <b>Nome</b> e incollale qui. Il team va scritto come nell'elenco (es. Team Diavola o solo Diavola); se è già pieno il concorrente resta senza team. La gara va scritta come nel regolamento (es. Napoletana). Chi fa più gare: più colonne, più gare nella stessa cella separate da virgola, oppure una riga per gara con lo stesso numero. I numeri già presenti vengono aggiornati, non duplicati.</p>
+          <textarea id="importText" rows="5" style="width:100%" placeholder="01&#9;Classica&#9;Pizzeria Da Mario&#10;02&#9;Napoletana&#9;Pizzeria Bella Napoli"></textarea>
+          <button id="importBtn" type="button">Importa</button>
+        </details>
+    </div>
 
+    <div class="grid">
       <div class="card">
         <h2>Giudici</h2>
         <form id="addJudge" class="row" style="margin-bottom:10px">
           <input name="name" class="grow" placeholder="Nome giudice" required>
+          <select name="role"><option value="gusto">Di gusto</option><option value="forno">Di forno</option></select>
           <button>Aggiungi</button>
         </form>
+        <div id="judgeCount" class="small" style="margin-bottom:10px"></div>
+        <div class="row small" style="margin-bottom:8px;gap:6px">Mostra: <select id="judgeFilter" style="padding:4px 6px;font-size:.85rem"></select></div>
         <table id="judgeTable"></table>
-        <p class="muted small">Ogni giudice inquadra una volta il proprio badge (stampabile da “Stampa QR”) per abilitare il telefono.</p>
+        <p class="muted small">Assegna a ogni giudice le sue categorie con <b>+ categoria</b>: sul telefono vedrà solo i concorrenti di quelle gare. Finché non ne assegni nessuna, il giudice vede <b>tutte</b> le categorie. Ogni giudice inquadra una volta il proprio badge (stampabile da “Stampa QR”) per abilitare il telefono. I giudici <b>di gusto</b> e <b>di forno</b> vedono solo i criteri che spettano a loro.</p>
       </div>
     </div>
 
     <div class="grid">
       <div class="card">
-        <h2>Criteri di valutazione</h2>
-        <p class="muted small">Il punteggio di ogni giudice è la media pesata dei criteri. Modificabili solo prima che arrivino voti.</p>
-        <div id="critList"></div>
-        <div class="row" style="margin:8px 0 14px">
-          <button class="ghost" id="addCrit" type="button">+ Criterio</button>
+        <h2>Regolamento: categorie e criteri</h2>
+        <p class="muted small">Una categoria per blocco. <code># Nome</code> apre la categoria; <code>gusto:</code> e <code>forno:</code> elencano i criteri con voto, separati da <code>|</code>; <code>forno ±5:</code> elenca le voci della lista di controllo (rispettata +punti, non rispettata −punti); <code>forno -5:</code> sole penalità (il giudice segna "Tutto ok" = 0 oppure "Penalità" = −punti). Modificabile solo prima che arrivino voti.</p>
+        <textarea id="rules" rows="16" spellcheck="false"></textarea>
+        <div class="row" style="margin:10px 0">
+          <label class="small">Voto da <input id="smin" type="number" style="width:70px"></label>
+          <label class="small">a <input id="smax" type="number" style="width:80px"></label>
+          <label class="small">Lista di controllo ± <input id="cpts" type="number" min="1" style="width:70px"> punti (se la riga non li indica)</label>
+          <button class="primary" id="saveRules">Salva regolamento</button>
         </div>
-        <div class="row">
-          <label>Scala da <input id="smin" type="number" style="width:70px"></label>
-          <label>a <input id="smax" type="number" style="width:70px"></label>
-          <button class="primary" id="saveCrit">Salva criteri</button>
-        </div>
+        <details><summary class="small">Anteprima categorie</summary><div id="rulesPreview"></div></details>
       </div>
 
       <div class="card">
@@ -115,11 +180,18 @@
         <label class="small muted">Indirizzo usato nei QR</label>
         <input id="setBase" style="width:100%" placeholder="">
         <p class="muted small" id="baseHint"></p>
-        <button class="primary" id="saveSettings">Salva</button>
+        <label class="small" style="display:block;margin:10px 0"><input type="checkbox" id="setWeighted"> <b>Voto ponderato</b> <span class="muted">— per ogni criterio media ponderata: con 5 giudici il voto più basso e il più alto valgono il 5% ciascuno e i tre centrali il 30%; con 4 giudici 7% · 43% · 43% · 7%; con 3 giudici 12,5% · 75% · 12,5%; con 1–2 giudici media semplice. La media ponderata dei criteri di gusto si moltiplica × 5 (come la somma di 5 giudici); quella del forno no. Spento: somma dei voti di tutti i giudici.</span></label>
+        <label class="small muted">Team (uno per riga; cambiare il nome non sposta i concorrenti)</label>
+        <textarea id="setTeams" rows="6" style="width:100%"></textarea>
+        <label class="small muted">Massimo concorrenti per team <input id="setTeamSize" type="number" min="1" style="width:70px"></label>
+        <div class="small muted" style="margin-top:10px">Gare che contano per la classifica a squadre:</div>
+        <div id="setTeamCats" class="small" style="display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:4px"></div>
+        <div style="margin-top:10px"><button class="primary" id="saveSettings">Salva</button></div>
         <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
         <h2>Azzera</h2>
-        <p class="muted small">Cancella tutti i dati (voti compresi).</p>
+        <p class="muted small"><b>Azzera solo i voti</b>: per rifare le prove. Toglie voti, bonus/malus e totali corretti a mano e riapre la votazione; concorrenti, giudici (con i telefoni già abilitati), team e regolamento restano. Prima salva una copia di sicurezza (data-backup-….json). <b>Azzera tutto</b> cancella tutti i dati.</p>
         <div class="row">
+          <button class="danger" id="resetVotes">Azzera solo i voti</button>
           <button class="danger" id="resetEmpty">Azzera tutto</button>
           <button class="danger" id="resetDemo">Azzera e carica demo</button>
         </div>
@@ -133,7 +205,8 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const STATUS = { open: 'Votazione aperta', closed: 'Votazione chiusa', revealed: 'Classifica rivelata' };
 let S = null;
-let critDraft = null;
+let rulesDraft = null;
+const catName = (id) => { const k = S && S.event.categories.find((x) => x.id === id); return k ? k.name : ''; };
 
 async function api(url, body) {
   const r = await fetch(url, body === undefined ? {} : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -183,59 +256,193 @@ function render() {
     $('rankingBody').innerHTML = `<div class="lock">🔒</div><h2 style="text-align:center">Classifica sigillata</h2>
       <p class="muted" style="text-align:center">I punteggi non sono visibili a nessuno finché non chiudi la votazione e premi “Rivela classifica”.</p>`;
   } else {
-    $('rankingBody').innerHTML = `<div class="row" style="justify-content:space-between"><h2>🏆 Classifica finale</h2><a class="btn ghost" href="/api/admin/export.csv">Scarica CSV</a></div>
-      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>N°</th><th>Concorrente</th><th>Totale</th><th>Media</th><th>Voti</th>${ev.criteria.map((c) => `<th>${esc(c.label)}</th>`).join('')}</tr>
-      ${S.ranking.map((r) => `<tr><td><b>${r.position}°</b></td><td>#${esc(r.number)}</td><td>${esc(r.name)}</td><td><b>${r.total}</b></td><td>${r.average}</td><td>${r.votes}</td>${ev.criteria.map((c) => `<td>${r.perCriterion[c.id]}</td>`).join('')}</tr>`).join('')}
-      </table></div><p class="muted small">Totale = somma dei punteggi dei giudici (ogni punteggio è la media pesata dei criteri). Colonne criteri = media dei giudici.</p>`;
+    $('rankingBody').innerHTML = `<div class="row" style="justify-content:space-between"><h2>🏆 Classifiche per categoria</h2><span><a class="btn ghost" href="/api/admin/export.csv">Scarica CSV</a> <a class="btn ghost" href="/api/admin/export-voti.csv" title="Ogni voto di ogni giudice, con il peso usato nel voto ponderato">Dettaglio voti (CSV)</a></span></div>
+      ${S.ranking.map((g) => `<h3 class="cat">${esc(g.name)}</h3>
+      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>N°</th><th>Concorrente</th><th>Totale</th><th>Voti</th>${g.criteria.map((c) => `<th title="Media dei giudici di ${c.role}">${esc(c.label)}<br><span style="text-transform:none;font-weight:400">media</span></th>`).join('')}</tr>
+      ${g.rows.map((r) => `<tr><td><b>${r.position}°</b></td><td>#${esc(r.number)}</td><td>${esc(r.name)}</td><td><b>${r.total}</b></td><td>${r.votes}</td>${g.criteria.map((c) => `<td>${r.perCriterion[c.id] ?? '–'}</td>`).join('')}</tr>`).join('')}
+      </table></div>`).join('')}
+      <p class="muted small">Totale = somma dei voti ponderati dei criteri (con 5 giudici: più basso e più alto 5% ciascuno, i tre centrali 30%). + bonus/malus, che è conteggiato ma non mostrato. Colonne dei criteri = media ponderata dei voti dei giudici.</p>
+      ${S.teamRanking && S.teamRanking.length ? `<h3 class="cat">👥 Classifica a squadre</h3>
+      <div style="overflow-x:auto"><table><tr><th>Pos.</th><th>Team</th><th>Totale</th><th>Concorrenti (punti portati alla squadra)</th></tr>
+      ${S.teamRanking.map((t) => `<tr><td><b>${t.position}°</b></td><td>${esc(t.name)}</td><td><b>${t.total}</b></td><td class="small">${t.members.map((m) => `#${esc(m.number)} ${esc(m.name)} <span class="muted">${esc(m.category || 'gara non scelta')}</span> (${m.total})`).join(' · ')}</td></tr>`).join('')}
+      </table></div><p class="muted small">Punteggio del team = somma dei punti che ogni concorrente prende nella sua gara per la squadra (una sola a testa) (escluse: ${esc(ev.teamExcluded.map(catName).filter(Boolean).join(', ') || 'nessuna')}).</p>` : ''}`;
   }
 
+  // Bonus / malus
+  // Bonus/malus per singola gara: chi è iscritto a più gare ha una riga per ognuna.
+  $('adjTable').innerHTML = S.entries.map((e) => `<tr><td><b>#${esc(e.number)}</b> <span class="muted small">${esc(e.category)} ${esc(e.name)}</span></td>
+    <td style="text-align:center;min-width:60px"><b>${fmtDelta(e.bonus)}</b></td>
+    <td style="text-align:right;white-space:nowrap"><button class="ghost" data-adj="${e.competitorId}" data-cat="${esc(e.categoryId)}" data-delta="-2">−2</button> <button class="ghost" data-adj="${e.competitorId}" data-cat="${esc(e.categoryId)}" data-delta="2">+2</button></td></tr>`).join('');
+  const byId = Object.fromEntries(S.competitors.map((c) => [c.id, c]));
+  const log = S.adjustments.slice().reverse();
+  $('adjLog').innerHTML = log.length ? `<h3 class="small muted" style="margin-top:14px">STORICO</h3><table>${log.map((a) => `<tr>
+    <td class="small muted">${new Date(a.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}</td>
+    <td>#${esc(byId[a.competitorId] ? byId[a.competitorId].number : '?')} <span class="muted small">${esc(catName(a.categoryId))}</span></td><td><b>${fmtDelta(a.delta)}</b></td>
+    <td class="small">${esc(a.note)}</td><td style="text-align:right"><button class="ghost small" data-undo="${a.id}">Annulla</button></td></tr>`).join('')}</table>` : '';
+
   // Matrice avanzamento
-  $('matrix').innerHTML = `<tr><th>Concorrente</th>${S.judges.map((j) => `<th class="j">${esc(j.name)}</th>`).join('')}<th>Voti</th></tr>` +
-    S.competitors.map((c) => `<tr><td>#${esc(c.number)} ${esc(c.name)}</td>${S.judges.map((j) => `<td class="c"><span class="dot ${c.judgesVoted.includes(j.id) ? 'on' : ''}" style="display:inline-block"></span></td>`).join('')}<td>${c.judgesVoted.length}/${S.judges.length}</td></tr>`).join('');
+  const noCat = S.competitors.filter((c) => !c.categoryIds.length);
+  $('matrix').innerHTML = `<tr><th>Concorrente</th><th>Gara</th>${S.judges.map((j) => `<th class="j">${esc(j.name)}</th>`).join('')}<th>Voti</th></tr>` +
+    noCat.map((c) => `<tr><td>#${esc(c.number)} ${esc(c.name)}</td><td class="small" style="color:var(--accent)">manca la gara</td>${S.judges.map(() => '<td class="c na"></td>').join('')}<td></td></tr>`).join('') +
+    (S.entries.length && !('votesTotal' in S.entries[0]) ? `<tr><td colspan="${S.judges.length + 3}" class="small" style="color:var(--accent);font-weight:700">⚠ Il programma in esecuzione è la versione vecchia: chiudi il Terminale e rilancia avvia.command per vedere i totali.</td></tr>` : '') +
+  S.entries.map((c) => { if (c.override === undefined) c.override = null; return c; }).map((c) => `<tr><td>#${esc(c.number)} ${esc(c.name)}</td><td class="small">${esc(c.category)}</td>${S.judges.map((j) => c.judgesExpected.includes(j.id)
+      ? `<td class="c"><span class="dot ${c.judgesVoted.includes(j.id) ? 'on' : ''}" style="display:inline-block"></span></td>`
+      : '<td class="c na" title="Non vota questa categoria"></td>').join('')}<td style="white-space:nowrap"><input class="tot ${c.override !== null ? 'man' : ''}" type="number" step="any" value="${c.override !== null ? c.override : (c.votesTotal ?? '')}" data-ov="${c.competitorId}" data-cat="${esc(c.categoryId)}" title="${c.override !== null ? `Modificato a mano (calcolato: ${c.votesTotal})` : 'Totale calcolato'}">
+        ${c.override !== null ? `<button class="ghost small" data-ov-reset="${c.competitorId}" data-cat="${esc(c.categoryId)}" title="Torna al totale calcolato (${c.votesTotal})">↺</button>` : ''}
+        <div class="muted small">${c.judgesVoted.length}/${c.judgesExpected.length} giudici${c.override !== null ? ' · modificato' : ''}</div></td></tr>`).join('');
 
-  $('compTable').innerHTML = S.competitors.map((c) => `<tr><td>#${esc(c.number)}</td><td>${esc(c.name)}</td><td><a href="${S.base}/v/${c.code}" target="_blank" class="small">link</a></td><td style="text-align:right"><button class="ghost small" data-del-comp="${c.id}">✕</button></td></tr>`).join('');
-  $('judgeTable').innerHTML = S.judges.map((j) => `<tr><td>${esc(j.name)}</td><td><a href="${S.base}/j/${j.token}" target="_blank" class="small">link badge</a></td><td style="text-align:right"><button class="ghost small" data-del-judge="${j.id}">✕</button></td></tr>`).join('');
+  const teamCount = (id, except) => S.competitors.filter((c) => c.teamId === id && c.id !== except).length;
+  // Team pieni non selezionabili (tranne quello attuale del concorrente).
+  const teamOptions = (sel, except) => `<option value="">— team —</option>` + ev.teams.map((t) => {
+    const n = teamCount(t.id, except), full = n >= ev.teamSize && t.id !== sel;
+    return `<option value="${esc(t.id)}" ${t.id === sel ? 'selected' : ''} ${full ? 'disabled' : ''}>${esc(t.name)} (${n + (t.id === sel && except ? 1 : 0)}/${ev.teamSize})${full ? ' · pieno' : ''}</option>`;
+  }).join('');
+  if (document.activeElement !== $('addCompTeam')) { const v = $('addCompTeam').value; $('addCompTeam').innerHTML = teamOptions(v); if ($('addCompTeam').selectedOptions[0] && $('addCompTeam').selectedOptions[0].disabled) $('addCompTeam').value = ''; }
+  if (document.activeElement !== $('setTeams')) $('setTeams').value = ev.teams.map((t) => t.name).join('\n');
+  if (document.activeElement !== $('setTeamSize')) $('setTeamSize').value = ev.teamSize;
+  if (document.activeElement !== $('setWeighted')) $('setWeighted').checked = !!ev.weighted;
+  if (!$('setTeamCats').contains(document.activeElement)) $('setTeamCats').innerHTML = ev.categories.map((k) => `<label><input type="checkbox" value="${esc(k.id)}" ${ev.teamExcluded.includes(k.id) ? '' : 'checked'}> ${esc(k.name)}</label>`).join('');
+  const catOptions = (sel, skip = [], first = '— gara —') => `<option value="">${first}</option>` + ev.categories.filter((k) => !skip.includes(k.id)).map((k) => `<option value="${esc(k.id)}" ${k.id === sel ? 'selected' : ''}>${esc(k.name)}</option>`).join('');
+  if (document.activeElement !== $('addCompCat')) { const v = $('addCompCat').value; $('addCompCat').innerHTML = catOptions(v); }
+  syncAddTeam();
+  // Gare del concorrente: una pillola per gara (✕ per toglierla) + menu per aggiungerne un'altra.
+  $('addCompNum').placeholder = 'N° ' + S.nextNumber;
+  S.competitors.sort((a, b) => (parseInt(a.number, 10) || 1e9) - (parseInt(b.number, 10) || 1e9));
+  $('compTable').innerHTML = (S.competitors.length ? '<tr><th>N°</th><th>Gare</th><th>Team</th><th>Nome</th><th>QR</th><th></th></tr>' : '') + S.competitors.map((c) => `<tr><td>#${esc(c.number)}</td>
+    <td>${c.categoryIds.map((id) => `<span class="gara">${esc(catName(id))}${c.votedCats.includes(id) ? '' : ` <button class="x" data-rm-cat="${c.id}" data-cat="${esc(id)}" title="Togli questa gara">✕</button>`}</span>`).join('')}
+      ${c.categoryIds.length < ev.categories.length ? `<select data-add-cat="${c.id}" style="padding:4px 6px;font-size:.8rem">${catOptions('', c.categoryIds, '+ gara')}</select>` : ''}</td>
+    <td>${!c.teamId && !c.categoryIds.some((id) => !ev.teamExcluded.includes(id)) ? `<select disabled style="padding:4px 6px;font-size:.8rem;max-width:170px" title="Le sue gare non contano per la classifica a squadre"><option>— niente squadra —</option></select>` : `<select data-team-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px">${teamOptions(c.teamId, c.id)}</select>`}
+      ${c.teamId && !c.categoryIds.some((id) => !ev.teamExcluded.includes(id)) ? `<div class="small" style="margin-top:4px;color:var(--accent);max-width:170px">⚠ Le sue gare non contano per la squadra: togli il team</div>` : c.teamId ? `<div style="margin-top:4px"><select data-teamcat-comp="${c.id}" style="padding:4px 6px;font-size:.8rem;max-width:170px;${c.teamCat ? '' : 'border-color:var(--accent);color:var(--accent)'}">
+        <option value="">${c.teamCat ? '' : '⚠ '}gara per la squadra…</option>${ev.categories.filter((k) => !ev.teamExcluded.includes(k.id)).map((k) => { const t = c.teamTaken.find((x) => x.id === k.id); return `<option value="${esc(k.id)}" ${k.id === c.teamCat ? 'selected' : ''} ${t ? 'disabled' : ''}>Squadra: ${esc(k.name)}${t ? ` (già del #${esc(t.number)})` : ''}</option>`; }).join('')}</select></div>` : ''}</td>
+    <td><input data-name-comp="${c.id}" value="${esc(c.name)}" placeholder="Nome concorrente" title="Scrivi il nome e premi Invio" style="padding:4px 6px;font-size:.9rem;min-width:160px;width:100%"></td><td><a href="${S.base}/v/${c.code}" target="_blank" class="small">link</a></td><td style="text-align:right"><button class="ghost small" data-del-comp="${c.id}" title="Elimina il concorrente" style="color:var(--accent);white-space:nowrap">🗑 Elimina</button></td></tr>`).join('');
+  // Categorie dei giudici: conteggio per gara (max 5 di gusto e 1 di forno) e pillole per giudice.
+  const roleCats = (role) => ev.categories.filter((k) => k.criteria.some((x) => x.role === role));
+  const jCats = (j) => (j.categoryIds || []).filter((id) => roleCats(j.role).some((k) => k.id === id));
+  const unassigned = S.judges.filter((j) => !jCats(j).length);
+  const MAXJ = { gusto: 5, forno: 1 };
+  const cnt = (k, role) => { if (!k.criteria.some((x) => x.role === role)) return '<td class="muted">—</td>'; const n = S.judges.filter((j) => j.role === role && jCats(j).includes(k.id)).length; return `<td style="${n > MAXJ[role] ? 'color:var(--accent);font-weight:700' : n === 0 ? 'color:var(--muted)' : ''}">${n}/${MAXJ[role]}${n > MAXJ[role] ? ' ⚠' : ''}</td>`; };
+  $('judgeCount').innerHTML = `<div style="overflow-x:auto"><table class="small"><tr><th>Giudici assegnati</th>${ev.categories.map((k) => `<th>${esc(k.name)}</th>`).join('')}</tr>${['gusto', 'forno'].map((role) => `<tr><td><span class="tag-role ${role}">${role}</span></td>${ev.categories.map((k) => cnt(k, role)).join('')}</tr>`).join('')}</table></div>${unassigned.length ? `<div style="margin-top:6px;color:var(--accent)">⚠ ${unassigned.length} giudici senza categorie assegnate: per ora vedono tutte le gare.</div>` : ''}`;
+  const jf = $('judgeFilter'), jfv = jf.value || '';
+  jf.innerHTML = `<option value="">Tutti i giudici (${S.judges.length})</option><option value="none">Senza categorie (${unassigned.length})</option>` + ev.categories.map((k) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('');
+  jf.value = jfv;
+  const shown = S.judges.filter((j) => !jfv || (jfv === 'none' ? !jCats(j).length : jCats(j).includes(jfv)));
+  $('judgeTable').innerHTML = shown.map((j) => `<tr><td><input data-name-judge="${j.id}" value="${esc(j.name)}" title="Scrivi il nome e premi Invio" style="padding:4px 6px;font-size:.9rem;min-width:170px"></td><td><span class="tag-role ${j.role}">${esc(j.roleLabel.replace('Giudice ', ''))}</span></td>
+    <td>${jCats(j).length ? jCats(j).map((id) => `<span class="gara">${esc(catName(id))}${(j.votedCats || []).includes(id) ? '' : ` <button class="x" data-rm-jcat="${j.id}" data-cat="${esc(id)}" title="Togli questa categoria">✕</button>`}</span>`).join('') : '<span class="muted small">Tutte le categorie</span> '}
+      ${jCats(j).length < roleCats(j.role).length ? `<select data-add-jcat="${j.id}" style="padding:4px 6px;font-size:.8rem"><option value="">+ categoria</option>${roleCats(j.role).filter((k) => !jCats(j).includes(k.id)).map((k) => `<option value="${esc(k.id)}">${esc(k.name)}</option>`).join('')}</select>` : ''}</td><td><a href="${S.base}/j/${j.token}" target="_blank" class="small">link badge</a></td><td style="text-align:right"><button class="ghost small" data-del-judge="${j.id}">✕</button></td></tr>`).join('');
 
-  if (!critDraft) critDraft = ev.criteria.map((c) => ({ ...c }));
-  renderCrit();
-  $('smin').value = ev.scaleMin; $('smax').value = ev.scaleMax;
+  if (rulesDraft === null) { rulesDraft = ev.rules; $('rules').value = ev.rules; }
+  $('rulesPreview').innerHTML = ev.categories.map((k) => `<div class="cat-prev"><b>${esc(k.name)}</b>${['gusto', 'forno'].map((role) => {
+    const cs = k.criteria.filter((x) => x.role === role);
+    return cs.length ? `<div class="small"><span class="tag-role ${role}">${role}</span>${cs.map((x) => esc(x.label) + (x.type === 'check' ? ` <span class="muted">(±${x.pts || ev.checkPoints})</span>` : x.type === 'penalty' ? ` <span class="muted">(penalità −${x.pts || ev.checkPoints})</span>` : '')).join(' · ')}</div>` : '';
+  }).join('')}</div>`).join('');
+  if (!['smin', 'smax', 'cpts'].includes(document.activeElement.id)) { $('smin').value = ev.scaleMin; $('smax').value = ev.scaleMax; $('cpts').value = ev.checkPoints; }
   if (document.activeElement !== $('setName')) $('setName').value = ev.name;
   if (document.activeElement !== $('setBase')) $('setBase').value = ev.baseUrl;
   $('setBase').placeholder = S.suggestedBase;
   $('baseHint').innerHTML = `Lascia vuoto per usare l'indirizzo con cui hai aperto questa pagina (ora: <code>${esc(S.base)}</code>). Per i telefoni sulla stessa Wi-Fi usa <code>${esc(S.suggestedBase)}</code>; per un evento reale l'indirizzo pubblico del server.`;
 }
 
-function renderCrit() {
-  $('critList').innerHTML = critDraft.map((c, i) => `<div class="crit-row">
-    <input data-ci="${i}" data-k="label" value="${esc(c.label)}" placeholder="Criterio">
-    <input data-ci="${i}" data-k="weight" type="number" step="0.5" min="0.5" value="${c.weight}" title="Peso">
-    <button class="ghost" data-rm="${i}" type="button">✕</button></div>`).join('') +
-    '<div class="muted small">Colonna centrale = peso del criterio.</div>';
-}
+function fmtDelta(n) { return n > 0 ? '+' + n : n < 0 ? '−' + Math.abs(n) : '0'; }
 
-$('critList').addEventListener('input', (e) => {
-  const i = e.target.dataset.ci; if (i == null) return;
-  critDraft[i][e.target.dataset.k] = e.target.dataset.k === 'weight' ? Number(e.target.value) : e.target.value;
-});
-$('critList').addEventListener('click', (e) => {
-  if (e.target.dataset.rm != null) { critDraft.splice(Number(e.target.dataset.rm), 1); renderCrit(); }
-});
-$('addCrit').onclick = () => { critDraft.push({ label: '', weight: 1 }); renderCrit(); };
-$('saveCrit').onclick = async () => {
-  await act('/api/admin/settings', { criteria: critDraft, scaleMin: Number($('smin').value), scaleMax: Number($('smax').value) }, 'Criteri salvati');
-  critDraft = S.event.criteria.map((c) => ({ ...c })); renderCrit();
+$('rules').addEventListener('input', () => { rulesDraft = $('rules').value; });
+$('saveRules').onclick = async () => {
+  const r = await api('/api/admin/settings', { rules: $('rules').value, scaleMin: Number($('smin').value), scaleMax: Number($('smax').value), checkPoints: Number($('cpts').value) });
+  if (r.http !== 200) { flash(r.error || 'Errore'); return; }
+  flash('Regolamento salvato', true);
+  rulesDraft = null;
+  load();
 };
-$('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value }, 'Impostazioni salvate');
+$('saveSettings').onclick = () => act('/api/admin/settings', { name: $('setName').value, baseUrl: $('setBase').value, teams: $('setTeams').value.split('\n'), teamSize: Number($('setTeamSize').value), weighted: $('setWeighted').checked, teamExcluded: [...$('setTeamCats').querySelectorAll('input:not(:checked)')].map((x) => x.value) }, 'Impostazioni salvate');
 
-$('addComp').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/competitor', { number: f.number.value, name: f.name.value }); f.reset(); };
-$('addJudge').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/judge', { name: f.name.value }); f.reset(); };
+$('renumber').onclick = () => confirm('Rinumerare tutti i concorrenti in sequenza 1, 2, 3… (in ordine di numero attuale)? Se hai già stampato le pettorine andranno ristampate. Voti e gare restano agganciati al concorrente.') && act('/api/admin/competitor/renumber', {}, 'Concorrenti rinumerati');
+// Gara che non conta per la squadra: niente team nel modulo di aggiunta.
+function syncAddTeam() {
+  const k = $('addCompCat').value, off = !!k && S.event.teamExcluded.includes(k);
+  $('addCompTeam').disabled = off;
+  if (off) $('addCompTeam').value = '';
+  $('addCompTeam').title = off ? 'Questa gara non conta per la classifica a squadre' : '';
+}
+$('addCompCat').addEventListener('change', syncAddTeam);
+$('addComp').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/competitor', { number: f.number.value, name: f.name.value, categoryId: f.categoryId.value, teamId: f.teamId.value }); f.number.value = ''; f.name.value = ''; };
+$('importBtn').onclick = async () => {
+  const r = await api('/api/admin/competitor/import', { text: $('importText').value });
+  if (r.http !== 200) flash(r.error || 'Errore'); else { flash(`Importati ${r.added} nuovi, aggiornati ${r.updated}` + (r.teamFull && r.teamFull.length ? `. Team non assegnato (pieno o gare non valide per la squadra): #${r.teamFull.join(', #')}` : ''), !(r.teamFull && r.teamFull.length)); $('importText').value = ''; }
+  load();
+};
+$('addJudge').onsubmit = (e) => { e.preventDefault(); const f = e.target; act('/api/admin/judge', { name: f.name.value, role: f.role.value }); f.name.value = ''; };
+document.addEventListener('change', (e) => {
+  const nm = e.target.dataset.nameComp;
+  if (nm) act('/api/admin/competitor/update', { id: nm, name: e.target.value }, 'Nome aggiornato');
+  const nj = e.target.dataset.nameJudge;
+  if (nj) act('/api/admin/judge/update', { id: nj, name: e.target.value }, 'Nome giudice aggiornato');
+  const ov = e.target.dataset.ov;
+  if (ov) {
+    const v = e.target.value.trim();
+    if (v === '') return load();
+    act('/api/admin/override', { competitorId: ov, categoryId: e.target.dataset.cat, total: Number(v) }, 'Totale voti modificato');
+  }
+  const tcat = e.target.dataset.teamcatComp;
+  if (tcat) act('/api/admin/competitor/update', { id: tcat, teamCategoryId: e.target.value }, 'Gara per la squadra aggiornata');
+  const tc = e.target.dataset.teamComp;
+  if (tc) act('/api/admin/competitor/update', { id: tc, teamId: e.target.value }, 'Team aggiornato');
+  if (e.target.id === 'judgeFilter') render();
+  const aj = e.target.dataset.addJcat;
+  if (aj && e.target.value) {
+    const j = S.judges.find((x) => x.id === aj);
+    act('/api/admin/judge/categories', { id: aj, categoryIds: [...(j.categoryIds || []), e.target.value] }, `Categoria assegnata a ${j.name}`);
+  }
+  const id = e.target.dataset.addCat;
+  if (id && e.target.value) {
+    const c = S.competitors.find((x) => x.id === id);
+    act('/api/admin/competitor/update', { id, categoryIds: [...c.categoryIds, e.target.value] }, `Gara aggiunta al #${c.number}`);
+  }
+});
+// Se ha già voti (o bonus) chiede una seconda conferma e li cancella insieme.
+async function del(url, id, what) {
+  let r = await api(url, { id });
+  if (r.http === 409 && r.needsForce) {
+    const parts = [r.votes ? `${r.votes} voti` : '', r.adjustments ? `${r.adjustments} bonus/malus` : ''].filter(Boolean).join(' e ');
+    if (!confirm(`Questo ${what} ha già ${parts}. Eliminandolo verranno cancellati anche quelli, senza possibilità di recupero. Procedere?`)) return;
+    r = await api(url, { id, force: true });
+  }
+  if (r.http !== 200) flash(r.error || 'Errore'); else flash(`${what[0].toUpperCase() + what.slice(1)} eliminato`, true);
+  load();
+}
 document.addEventListener('click', (e) => {
   const c = e.target.dataset.delComp, j = e.target.dataset.delJudge;
-  if (c && confirm('Eliminare il concorrente?')) act('/api/admin/competitor/delete', { id: c });
-  if (j && confirm('Eliminare il giudice?')) act('/api/admin/judge/delete', { id: j });
+  if (c && confirm('Eliminare il concorrente?')) del('/api/admin/competitor/delete', c, 'concorrente');
+  if (j && confirm('Eliminare il giudice?')) del('/api/admin/judge/delete', j, 'giudice');
+  const rmj = e.target.dataset.rmJcat;
+  if (rmj) {
+    const j = S.judges.find((x) => x.id === rmj);
+    const left = j.categoryIds.filter((k) => k !== e.target.dataset.cat);
+    if (confirm(`Togliere ${catName(e.target.dataset.cat)} a ${j.name}?${left.length ? '' : ' Senza categorie vedrà di nuovo tutte le gare.'}`)) act('/api/admin/judge/categories', { id: rmj, categoryIds: left });
+  }
+  const rm = e.target.dataset.rmCat;
+  if (rm) {
+    const c = S.competitors.find((x) => x.id === rm);
+    if (confirm(`Togliere la gara ${catName(e.target.dataset.cat)} al #${c.number}?`)) act('/api/admin/competitor/update', { id: rm, categoryIds: c.categoryIds.filter((k) => k !== e.target.dataset.cat) });
+  }
+  const adj = e.target.dataset.adj;
+  if (adj) {
+    const delta = Number(e.target.dataset.delta);
+    const c = S.competitors.find((x) => x.id === adj);
+    act('/api/admin/adjust', { competitorId: adj, categoryId: e.target.dataset.cat, delta, note: $('adjNote').value }, `${fmtDelta(delta)} al #${c ? c.number : ''} (${catName(e.target.dataset.cat)})`);
+    $('adjNote').value = '';
+  }
+  const ovr = e.target.dataset.ovReset;
+  if (ovr && confirm('Tornare al totale calcolato dai voti dei giudici?')) act('/api/admin/override', { competitorId: ovr, categoryId: e.target.dataset.cat, total: null }, 'Totale ripristinato');
+  const u = e.target.dataset.undo;
+  if (u && confirm('Annullare questo bonus/malus?')) act('/api/admin/adjust/delete', { id: u }, 'Modifica annullata');
 });
-$('resetEmpty').onclick = () => confirm('Cancellare TUTTI i dati, voti compresi?') && act('/api/admin/reset', {}, 'Dati azzerati').then(() => { critDraft = null; load(); });
-$('resetDemo').onclick = () => confirm('Cancellare tutto e ricaricare i dati demo?') && act('/api/admin/reset', { demo: true }, 'Demo caricata').then(() => { critDraft = null; load(); });
+$('resetVotes').onclick = async () => {
+  if (!confirm(`Cancellare tutti i voti (${S.votesCount}), i bonus/malus e i totali corretti a mano? Concorrenti, giudici e team restano. Viene salvata una copia di sicurezza.`)) return;
+  const r = await api('/api/admin/reset-votes', {});
+  if (r.http !== 200) flash(r.error || 'Errore'); else flash(`Voti azzerati (${r.removed}). Copia di sicurezza: ${r.backup}`, true);
+  load();
+};
+$('resetEmpty').onclick = () => confirm('Cancellare TUTTI i dati, voti compresi?') && act('/api/admin/reset', {}, 'Dati azzerati').then(() => { rulesDraft = null; load(); });
+$('resetDemo').onclick = () => confirm('Cancellare tutto e ricaricare i dati demo?') && act('/api/admin/reset', { demo: true }, 'Demo caricata').then(() => { rulesDraft = null; load(); });
 
 $('loginForm').onsubmit = async (e) => {
   e.preventDefault();
@@ -244,7 +451,7 @@ $('loginForm').onsubmit = async (e) => {
 };
 
 load();
-setInterval(() => { if (S && !document.querySelector('input:focus')) load(); }, 4000);
+setInterval(() => { if (S && !document.querySelector('input:focus, textarea:focus, select:focus')) load(); }, 4000);
 </script>
 </body>
 </html>

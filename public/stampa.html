@@ -12,6 +12,9 @@
   .tag .ev { font-size: 10pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
   .tag .num { font-size: 54pt; font-weight: 900; line-height: 1; color: var(--accent); margin: 3mm 0; }
   .tag .name { font-size: 13pt; font-weight: 600; margin-bottom: 4mm; }
+  .tag .who { font-size: 16pt; font-weight: 800; margin-bottom: 2mm; text-transform: uppercase; }
+  .tag .cats { display: flex; flex-wrap: wrap; justify-content: center; gap: 2mm; margin-bottom: 4mm; }
+  .tag .cats span { border: 1.5px solid var(--accent); color: var(--accent); border-radius: 99px; padding: 1mm 3mm; font-size: 11pt; font-weight: 700; }
   .tag .qr svg { width: 55mm; height: 55mm; }
   .tag .hint { font-size: 9pt; color: var(--muted); margin-top: 2mm; }
   .tag.judge { border-style: dashed; }
@@ -59,10 +62,11 @@ function qr(text) {
   const ev = esc(S.event.name);
   document.getElementById('out').innerHTML = `
     <h2 class="section first">Pettorine concorrenti</h2>
-    <div class="sheet">${S.competitors.map((c) => `<div class="tag">
+    <div class="sheet">${[...S.competitors].sort((a, b) => (parseInt(a.number, 10) || 1e9) - (parseInt(b.number, 10) || 1e9)).map((c) => `<div class="tag">
       <div class="ev">${ev}</div>
       <div class="num">${esc(c.number)}</div>
-      <div class="name">${esc(c.name)}</div>
+      ${c.name ? `<div class="who">${esc(c.name)}</div>` : ''}
+      <div class="cats">${c.categoryIds.map((id) => (S.event.categories.find((k) => k.id === id) || {}).name).filter(Boolean).map((n) => `<span>${esc(n)}</span>`).join('') || '<span>gara da assegnare</span>'}</div>
       <div class="qr">${qr(`${S.base}/v/${c.code}`)}</div>
       <div class="hint">Giudici: inquadrate per votare</div>
     </div>`).join('')}</div>
@@ -70,6 +74,7 @@ function qr(text) {
     <div class="sheet">${S.judges.map((j) => `<div class="tag judge">
       <div class="ev">${ev}</div>
       <div class="num">${esc(j.name)}</div>
+      <div class="name">${esc(j.roleLabel)}</div>
       <div class="qr">${qr(`${S.base}/j/${j.token}`)}</div>
       <div class="hint">Inquadra una sola volta per abilitare il tuo telefono al voto</div>
       <div class="warn">PERSONALE · NON CONDIVIDERE</div>
